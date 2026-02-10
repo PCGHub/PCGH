@@ -1,3 +1,7 @@
+if (!process.env.FLW_SECRET_KEY) {
+  return res.status(500).json({ error: "Missing FLW_SECRET_KEY on server" });
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
