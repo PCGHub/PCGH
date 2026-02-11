@@ -1,16 +1,16 @@
-export const config = { runtime: "nodejs" };
-
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
-);
+const { createClient } = require("@supabase/supabase-js");
 
 const PLAN_MAP = { pro_pack: { amount: 4000, credits: 2500 } };
 
-export default async function handler(req, res) {
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url) throw new Error("Missing SUPABASE_URL");
+  if (!key) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+module.exports = async (req, res) => {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -33,9 +33,7 @@ export default async function handler(req, res) {
     const verifyJson = await verifyRes.json().catch(() => ({}));
     const v = verifyJson?.data;
 
-    if (!verifyRes.ok || !v) {
-      return res.status(400).json({ error: "Verification failed", details: verifyJson });
-    }
+    if (!verifyRes.ok || !v) return res.status(400).json({ error: "Verification failed" });
 
     const { status, currency } = v;
     const amount = Number(v.amount || 0);
@@ -43,11 +41,13 @@ export default async function handler(req, res) {
     const user_id = meta.user_id;
     const plan = meta.plan;
 
+    const supabase = getSupabase();
+
     await supabase.from("payments").upsert(
       {
         provider: "flutterwave",
         provider_reference: String(txId),
-        user_id,
+        user_id: user_id || null,
         amount,
         currency,
         status,
@@ -56,14 +56,10 @@ export default async function handler(req, res) {
       { onConflict: "provider,provider_reference" }
     );
 
-    if (status !== "successful" || currency !== "NGN" || !user_id) {
-      return res.status(200).json({ ok: true });
-    }
+    if (status !== "successful" || currency !== "NGN" || !user_id) return res.status(200).json({ ok: true });
 
     const rule = PLAN_MAP[String(plan)];
-    if (!rule || rule.amount !== amount) {
-      return res.status(200).json({ ok: true });
-    }
+    if (!rule || rule.amount !== amount) return res.status(200).json({ ok: true });
 
     const reference = `flw:${txId}`;
 
@@ -77,6 +73,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, credited: !creditRes.error });
   } catch (e) {
+    console.error("Webhook error:", e);
     return res.status(500).json({ error: "Server error", details: String(e?.stack || e) });
   }
-}
+};
