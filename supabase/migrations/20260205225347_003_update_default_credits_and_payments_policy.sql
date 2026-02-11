@@ -1,18 +1,22 @@
-/*
-  # Update default credits and payment policies
+/async function startFlutterwavePayment() {
+  const response = await fetch("/api/payments/flutterwave/init", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      plan: "pro_pack",
+      user_id: user.id,
+      email: user.email,
+      name: user.user_metadata?.full_name || "User"
+    })
+  });
 
-  1. Changes:
-    - Update default free credits from 20 to 150 for new users
-    - Add UPDATE policy on payments table for completing payment records
+  const data = await response.json();
 
-  2. Security:
-    - Payment UPDATE restricted to own records only
-*/
-
-ALTER TABLE users ALTER COLUMN credits SET DEFAULT 150;
-
-CREATE POLICY "Users can update own payments"
-  ON payments FOR UPDATE
-  TO authenticated
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
+  if (data.link) {
+    window.location.href = data.link;
+  } else {
+    alert("Payment failed");
+  }
+}
