@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Coins, Check, Loader, AlertCircle, Sparkles, Zap, Crown, ShieldCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { API } from '../lib/api'
-import { initializePaystack, generateReference } from '../lib/paystack'
+import { initFlutterwavePayment } from '../lib/flutterwave'
 
 const CREDIT_PACKAGES = [
   {
@@ -14,7 +13,8 @@ const CREDIT_PACKAGES = [
     icon: Zap,
     color: 'from-sky-500 to-blue-600',
     borderColor: 'border-blue-200 hover:border-blue-400',
-    popular: false
+    popular: false,
+    plan: 'starter_pack', // <-- must match your backend PLAN_MAP
   },
   {
     id: 'growth',
@@ -24,7 +24,8 @@ const CREDIT_PACKAGES = [
     icon: Sparkles,
     color: 'from-emerald-500 to-teal-600',
     borderColor: 'border-emerald-200 hover:border-emerald-400',
-    popular: true
+    popular: true,
+    plan: 'growth_pack', // <-- must match your backend PLAN_MAP
   },
   {
     id: 'pro',
@@ -34,7 +35,8 @@ const CREDIT_PACKAGES = [
     icon: Crown,
     color: 'from-amber-500 to-orange-600',
     borderColor: 'border-amber-200 hover:border-amber-400',
-    popular: false
+    popular: false,
+    plan: 'pro_pack', // <-- you already use this in PowerShell test
   }
 ]
 
@@ -42,6 +44,7 @@ export default function BuyCredits() {
   const navigate = useNavigate()
   const [userCredits, setUserCredits] = useState(0)
   const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
   const [userId, setUserId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState(null)
@@ -58,16 +61,24 @@ export default function BuyCredits() {
         }
 
         setUserId(session.user.id)
-        setUserEmail(session.user.email)
+        setUserEmail(session.user.email || '')
 
         const { data: profile } = await supabase
           .from('users')
-          .select('credits')
+          .select('credits, full_name, name, username')
           .eq('id', session.user.id)
           .maybeSingle()
 
         if (profile) {
           setUserCredits(Number(profile.credits) || 0)
+
+          // pick the first available name field
+          const n =
+            profile.full_name ||
+            profile.name ||
+            profile.username ||
+            'PCGH User'
+          setUserName(n)
         }
       } catch (err) {
         setError('Failed to load profile')
@@ -89,54 +100,18 @@ export default function BuyCredits() {
     setSuccess(null)
 
     try {
-      const reference = generateReference()
-
-      const pendingPayment = await API.createPendingPayment(userId, {
-        credits: pkg.credits,
-        priceNaira: pkg.priceNaira,
-        label: pkg.label,
-        reference
-      })
-
-      await initializePaystack({
+      // 1) ask backend to create hosted payment + return link
+      const { link } = await initFlutterwavePayment({
+        plan: pkg.plan,     // IMPORTANT: must match server PLAN_MAP keys
+        user_id: userId,
         email: userEmail,
-        amountKobo: pkg.priceNaira * 100,
-        reference,
-        metadata: {
-          userId,
-          packageId: pkg.id,
-          credits: pkg.credits,
-          paymentId: pendingPayment.id
-        },
-        onSuccess: async (response) => {
-          try {
-            await API.completePaystackPayment(userId, {
-              paymentId: pendingPayment.id,
-              reference: response.reference,
-              credits: pkg.credits,
-              label: pkg.label
-            })
-
-            const { data: updated } = await supabase
-              .from('users')
-              .select('credits')
-              .eq('id', userId)
-              .maybeSingle()
-
-            if (updated) setUserCredits(Number(updated.credits) || 0)
-            setSuccess(pkg)
-          } catch (err) {
-            setError('Payment was received but credits could not be added. Please contact support with reference: ' + response.reference)
-          } finally {
-            setPurchasing(null)
-          }
-        },
-        onClose: () => {
-          setPurchasing(null)
-        }
+        name: userName || 'PCGH User',
       })
+
+      // 2) redirect user to Flutterwave hosted checkout
+      window.location.href = link
     } catch (err) {
-      setError(err.message || 'Failed to initialize payment. Please try again.')
+      setError(err?.message || 'Failed to initialize payment. Please try again.')
       setPurchasing(null)
     }
   }
@@ -157,6 +132,7 @@ export default function BuyCredits() {
           <p className="text-gray-600 mt-3 text-lg">
             Power up your growth with more credits
           </p>
+
           {userId && (
             <div className="mt-4 inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-5 py-2.5 shadow-sm">
               <Coins className="w-5 h-5 text-amber-500" />
@@ -258,7 +234,7 @@ export default function BuyCredits() {
                     {purchasing === pkg.id ? (
                       <span className="flex items-center justify-center gap-2">
                         <Loader className="w-4 h-4 animate-spin" />
-                        Processing...
+                        Redirecting...
                       </span>
                     ) : (
                       `Pay ${'\u20A6'}${pkg.priceNaira.toLocaleString()}`
@@ -273,9 +249,9 @@ export default function BuyCredits() {
         <div className="mt-10 flex flex-col items-center gap-2 text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Secured by Paystack</span>
+            <span>Secured by Flutterwave</span>
           </div>
-          <p>Credits are added instantly after payment. All purchases are final.</p>
+          <p>Credits are added after payment verification. All purchases are final.</p>
         </div>
       </div>
     </div>

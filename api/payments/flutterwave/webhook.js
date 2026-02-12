@@ -4,7 +4,11 @@ console.log("body:", JSON.stringify(req.body));
 
 const { createClient } = require("@supabase/supabase-js");
 
-const PLAN_MAP = { pro_pack: { amount: 4000, credits: 2500 } };
+const PLAN_MAP = {
+  starter_pack: { amount: 1000, credits: 500 },
+  growth_pack: { amount: 1800, credits: 1000 },
+  pro_pack: { amount: 4000, credits: 2500 },
+};
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL;

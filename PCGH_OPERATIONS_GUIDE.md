@@ -465,57 +465,49 @@ Diverse revenue:
 ```
 User clicks "Buy Credits"
     ↓
-Selects package (e.g., 500 credits for ₦5,000)
+Selects package (e.g., 2500 credits for ₦4,000)
     ↓
-Redirected to Paystack
+Redirected to Flutterwave checkout (hosted)
     ↓
 Completes payment (card/USSD/transfer)
     ↓
-Paystack sends webhook to your server
+Flutterwave sends webhook to your Vercel endpoint
     ↓
-Verify signature + add credits to user account
+Server verifies transaction via Flutterwave API
+    ↓
+Credits added to user account (idempotent)
     ↓
 Show success page
+
 ```
 
-**Code outline:**
-
-```javascript
-// Frontend: Initiate payment
-const initiatePayment = (userId, creditPackage) => {
-  fetch('/api/payment/initiate', {
-    method: 'POST',
+// Frontend: initiate payment (redirect)
+async function initiatePayment(userId, creditPackage, email, name) {
+  const res = await fetch("/api/payments/flutterwave/init", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      userId,
-      credits: creditPackage.credits,
-      amount: creditPackage.naira
+      user_id: userId,
+      plan: creditPackage.plan,
+      email,
+      name
     })
-  })
-  .then(res => res.json())
-  .then(data => window.location.href = data.paymentUrl)
+  });
+
+  const data = await res.json();
+  if (!data.link) throw new Error("No checkout link returned");
+  window.location.href = data.link;
 }
 
-// Backend: Paystack webhook handler
-app.post('/api/payment/webhook', async (req) => {
-  const { event, data } = req.body
+// Backend: Flutterwave webhook
+module.exports = async (req, res) => {
+  // verify `verif-hash` header === FLW_WEBHOOK_SECRET_HASH
+  // verify tx via /v3/transactions/:id/verify
+  // upsert into payments with provider="flutterwave"
+  // insert credit transaction with unique reference `flw:${txId}`
+  res.status(200).json({ ok: true });
+};
 
-  if (event === 'charge.success') {
-    const { reference } = data
-
-    // Verify with Paystack
-    const verification = await verifyPaystackPayment(reference)
-
-    if (verification.status) {
-      const { userId, creditsToAdd } = verification.data
-
-      // Add credits to user
-      await addCredits(userId, creditsToAdd)
-
-      // Record payment
-      await recordPayment(userId, verification)
-    }
-  }
-})
 ```
 
 **Commission Structure:**

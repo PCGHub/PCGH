@@ -15,9 +15,11 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Missing plan, user_id or email" });
     }
 
-    const PLAN_MAP = { pro_pack: { amount: 4000, credits: 2500 } };
-    const rule = PLAN_MAP[String(plan)];
-    if (!rule) return res.status(400).json({ error: "Invalid plan" });
+    const PLAN_MAP = {
+  starter_pack: { amount: 1000, credits: 500 },
+  growth_pack: { amount: 1800, credits: 1000 },
+  pro_pack: { amount: 4000, credits: 2500 },
+};
 
     const tx_ref = `pcgh_${user_id}_${Date.now()}`;
 
