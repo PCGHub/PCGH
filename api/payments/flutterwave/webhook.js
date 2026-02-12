@@ -1,3 +1,7 @@
+console.log("🔥 FLW WEBHOOK HIT");
+console.log("headers.verif-hash:", req.headers["verif-hash"]);
+console.log("body:", JSON.stringify(req.body));
+
 const { createClient } = require("@supabase/supabase-js");
 
 const PLAN_MAP = { pro_pack: { amount: 4000, credits: 2500 } };
