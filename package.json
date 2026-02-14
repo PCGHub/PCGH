@@ -27,3 +27,9 @@
     "autoprefixer": "^10.4.16"
   }
 }
+
+{
+  "engines": {
+    "node": "18.x"
+  }
+}
