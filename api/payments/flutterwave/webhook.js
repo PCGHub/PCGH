@@ -1,6 +1,4 @@
-console.log("🔥 FLW WEBHOOK HIT");
-console.log("headers.verif-hash:", req.headers["verif-hash"]);
-console.log("body:", JSON.stringify(req.body));
+// api/payments/flutterwave/webhook.js
 
 const { createClient } = require("@supabase/supabase-js");
 
@@ -10,7 +8,7 @@ const PLAN_MAP = {
   pro_pack: { amount: 4000, credits: 2500 },
 };
 
-function getSupabase() {
+function getSupabaseAdmin() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) throw new Error("Missing SUPABASE_URL");
@@ -18,70 +16,153 @@ function getSupabase() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+function getIncomingHash(req) {
+  // handle casing differences across platforms
+  return (
+    req.headers["verif-hash"] ||
+    req.headers["Verif-Hash"] ||
+    req.headers["x-verif-hash"] ||
+    req.headers["X-Verif-Hash"]
+  );
+}
+
+function getSecretHash() {
+  // support your env name + common fallback
+  return (
+    process.env.FLW_WEBHOOK_SECRET_HASH ||
+    process.env.FLW_SECRET_HASH
+  );
+}
+
+function parseUserIdFromTxRef(tx_ref) {
+  // tx_ref format: pcgh_<userId>_<timestamp>
+  if (!tx_ref || typeof tx_ref !== "string") return null;
+  const parts = tx_ref.split("_");
+  if (parts.length < 3) return null;
+  if (parts[0] !== "pcgh") return null;
+  return parts[1] || null;
+}
+
+async function flwVerify({ txId }) {
+  const key = process.env.FLW_SECRET_KEY;
+  if (!key) throw new Error("Missing FLW_SECRET_KEY");
+
+  const r = await fetch(`https://api.flutterwave.com/v3/transactions/${txId}/verify`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(json?.message || "Flutterwave verify failed");
+  }
+  return json?.data;
+}
+
 module.exports = async (req, res) => {
   try {
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-    const hash = req.headers["verif-hash"];
-    if (!hash || hash !== process.env.FLW_WEBHOOK_SECRET_HASH) {
-      return res.status(401).json({ error: "Invalid webhook hash" });
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
-    if (!process.env.FLW_SECRET_KEY) {
-      return res.status(500).json({ error: "Missing FLW_SECRET_KEY on server" });
+    // ✅ DEBUG LOGS (keep for now)
+    console.log("WEBHOOK HIT ✅", new Date().toISOString());
+    console.log("HEADERS ✅", JSON.stringify(req.headers));
+    console.log("BODY ✅", JSON.stringify(req.body));
+
+    // 1) signature verification
+    const incomingHash = getIncomingHash(req);
+    const secretHash = getSecretHash();
+
+    if (!incomingHash || !secretHash || incomingHash !== secretHash) {
+      console.log("WEBHOOK REJECTED ❌", { incomingHash: !!incomingHash, secretHash: !!secretHash });
+      return res.status(401).json({ error: "Invalid webhook signature" });
     }
 
-    const txId = req.body?.data?.id;
-    if (!txId) return res.status(200).json({ ok: true });
+    const body = req.body || {};
+    const data = body.data || {};
 
-    const verifyRes = await fetch(`https://api.flutterwave.com/v3/transactions/${txId}/verify`, {
-      headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` },
-    });
+    const txId = data.id;
+    const txRef = data.tx_ref;
 
-    const verifyJson = await verifyRes.json().catch(() => ({}));
-    const v = verifyJson?.data;
+    if (!txId) return res.status(200).json({ ok: true, ignored: "missing tx id" });
 
-    if (!verifyRes.ok || !v) return res.status(400).json({ error: "Verification failed" });
+    // 2) Verify with Flutterwave (source of truth)
+    const verified = await flwVerify({ txId });
 
-    const { status, currency } = v;
-    const amount = Number(v.amount || 0);
-    const meta = v.meta || {};
-    const user_id = meta.user_id;
+    const status = String(verified?.status || "").toLowerCase();
+    const currency = verified?.currency;
+    const amount = Number(verified?.amount);
+    const vTxRef = verified?.tx_ref || txRef;
+
+    if (status !== "successful") return res.status(200).json({ ok: true, ignored: "not successful" });
+    if (currency !== "NGN") return res.status(200).json({ ok: true, ignored: "currency mismatch" });
+
+    // 3) Extract meta
+    const meta = verified?.meta || data?.meta || {};
     const plan = meta.plan;
+    let user_id = meta.user_id || meta.userId || null;
 
-    const supabase = getSupabase();
+    // fallback: parse from tx_ref
+    if (!user_id) user_id = parseUserIdFromTxRef(vTxRef);
 
-    await supabase.from("payments").upsert(
-      {
-        provider: "flutterwave",
-        provider_reference: String(txId),
-        user_id: user_id || null,
-        amount,
-        currency,
-        status,
-        raw: verifyJson,
-      },
-      { onConflict: "provider,provider_reference" }
-    );
-
-    if (status !== "successful" || currency !== "NGN" || !user_id) return res.status(200).json({ ok: true });
+    if (!user_id) return res.status(200).json({ ok: true, ignored: "missing user_id" });
+    if (!plan || !PLAN_MAP[String(plan)]) return res.status(200).json({ ok: true, ignored: "invalid plan" });
 
     const rule = PLAN_MAP[String(plan)];
-    if (!rule || rule.amount !== amount) return res.status(200).json({ ok: true });
+    if (amount < rule.amount) return res.status(200).json({ ok: true, ignored: "amount mismatch" });
 
+    const sb = getSupabaseAdmin();
+
+    // 4) Idempotency: insert credit transaction with unique reference
     const reference = `flw:${txId}`;
 
-    const creditRes = await supabase.from("credit_transactions").insert({
-      user_id,
-      reference,
-      amount: rule.credits,
-      type: "topup",
-      note: `Flutterwave topup: ${plan}`,
-    });
+    const { error: insErr } = await sb
+      .from("credit_transactions")
+      .insert({ user_id, reference, credits: rule.credits });
 
-    return res.status(200).json({ ok: true, credited: !creditRes.error });
+    if (insErr) {
+      const msg = String(insErr.message || "").toLowerCase();
+      if (msg.includes("duplicate")) {
+        return res.status(200).json({ ok: true, duplicate: true });
+      }
+      console.log("credit_transactions insert error ❌", insErr);
+      return res.status(500).json({ error: "Failed to insert credit transaction", details: insErr.message });
+    }
+
+    // 5) Update user credits
+    const { data: userRow, error: selErr } = await sb
+      .from("users")
+      .select("credits")
+      .eq("id", user_id)
+      .maybeSingle();
+
+    if (selErr) {
+      console.log("users select error ❌", selErr);
+      return res.status(500).json({ error: "Failed to read user credits", details: selErr.message });
+    }
+
+    const before = Number(userRow?.credits || 0);
+    const after = before + Number(rule.credits || 0);
+
+    const { error: updErr } = await sb
+      .from("users")
+      .update({ credits: after })
+      .eq("id", user_id);
+
+    if (updErr) {
+      console.log("users update error ❌", updErr);
+      return res.status(500).json({ error: "Failed to update credits", details: updErr.message });
+    }
+
+    console.log("CREDITED ✅", { user_id, before, after, added: rule.credits, txId });
+
+    return res.status(200).json({ ok: true, user_id, before, after, added: rule.credits, reference });
   } catch (e) {
-    console.error("Webhook error:", e);
-    return res.status(500).json({ error: "Server error", details: String(e?.stack || e) });
+    console.log("WEBHOOK ERROR ❌", e);
+    return res.status(500).json({ error: "Server error", details: String(e?.message || e) });
   }
 };
