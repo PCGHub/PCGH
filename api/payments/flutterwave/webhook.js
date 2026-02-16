@@ -59,9 +59,7 @@ async function flwVerify(txId) {
 
 module.exports = async (req, res) => {
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
     console.log("WEBHOOK HIT ✅", new Date().toISOString());
     console.log("HEADERS ✅", JSON.stringify(req.headers));
@@ -87,29 +85,20 @@ module.exports = async (req, res) => {
 
     if (!txId) return res.status(200).json({ ok: true, ignored: "missing tx id" });
 
-    // 2) verify with Flutterwave (source of truth)
+    // 2) verify with Flutterwave
     const verified = await flwVerify(txId);
 
     const status = String(verified?.status || data?.status || "").toLowerCase();
-    const currency = verified?.currency || data?.currency;
     const amount = Number(verified?.amount ?? data?.amount ?? 0);
     const vTxRef = verified?.tx_ref || txRef;
 
     if (status !== "successful") return res.status(200).json({ ok: true, ignored: "not successful" });
-    if (currency !== "NGN") return res.status(200).json({ ok: true, ignored: "currency mismatch" });
 
-    // 3) meta extraction (Flutterwave sends meta_data in your payload)
-    const meta =
-      verified?.meta ||
-      verified?.meta_data ||
-      body?.meta_data ||
-      data?.meta ||
-      data?.meta_data ||
-      {};
+    // 3) meta extraction (Flutterwave sends meta_data)
+    const meta = verified?.meta || verified?.meta_data || body?.meta_data || data?.meta_data || data?.meta || {};
 
     const plan = meta.plan;
     let user_id = meta.user_id || meta.userId || null;
-
     if (!user_id) user_id = parseUserIdFromTxRef(vTxRef);
 
     if (!user_id) return res.status(200).json({ ok: true, ignored: "missing user_id" });
@@ -117,31 +106,21 @@ module.exports = async (req, res) => {
 
     const rule = PLAN_MAP[String(plan)];
 
-    // basic amount check
-    if (amount < Number(rule.amount)) {
-      return res.status(200).json({ ok: true, ignored: "amount mismatch" });
-    }
+    // amount sanity check
+    if (amount < Number(rule.amount)) return res.status(200).json({ ok: true, ignored: "amount mismatch" });
 
     const sb = getSupabaseAdmin();
 
-    // 4) idempotency + record payment row
-    // Your DB requires NOT NULL amount — so we include amount.
+    // 4) idempotent insert into credit_transactions
+    // IMPORTANT: insert ONLY columns we KNOW exist (avoid schema cache errors)
     const reference = `flw:${txId}`;
 
-    const { error: insErr } = await sb
-      .from("credit_transactions")
-      .insert({
-        user_id,
-        reference,
-        credits: rule.credits,
-        amount, // ✅ REQUIRED by your table (not null)
-        provider: "flutterwave", // if this column exists it will store provider; if not, Supabase will error
-        plan: String(plan),      // same note as above
-        currency,                // same note as above
-      });
-
-    // If your table doesn't have provider/plan/currency columns and it errors,
-    // comment them out and keep only: user_id, reference, credits, amount.
+    const { error: insErr } = await sb.from("credit_transactions").insert({
+      user_id,
+      reference,
+      credits: rule.credits,
+      amount, // your table requires this NOT NULL ✅
+    });
 
     if (insErr) {
       const msg = String(insErr.message || "").toLowerCase();
@@ -153,7 +132,7 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: "Failed to insert credit transaction", details: insErr.message });
     }
 
-    // 5) update user credits
+    // 5) update users.credits
     const { data: userRow, error: selErr } = await sb
       .from("users")
       .select("credits")
@@ -168,10 +147,7 @@ module.exports = async (req, res) => {
     const before = Number(userRow?.credits || 0);
     const after = before + Number(rule.credits || 0);
 
-    const { error: updErr } = await sb
-      .from("users")
-      .update({ credits: after })
-      .eq("id", user_id);
+    const { error: updErr } = await sb.from("users").update({ credits: after }).eq("id", user_id);
 
     if (updErr) {
       console.log("users update error ❌", updErr);
