@@ -17,7 +17,6 @@ function getSupabaseAdmin() {
 }
 
 function getIncomingHash(req) {
-  // handle casing differences across platforms
   return (
     req.headers["verif-hash"] ||
     req.headers["Verif-Hash"] ||
@@ -27,11 +26,7 @@ function getIncomingHash(req) {
 }
 
 function getSecretHash() {
-  // support your env name + common fallback
-  return (
-    process.env.FLW_WEBHOOK_SECRET_HASH ||
-    process.env.FLW_SECRET_HASH
-  );
+  return process.env.FLW_WEBHOOK_SECRET_HASH || process.env.FLW_SECRET_HASH;
 }
 
 function parseUserIdFromTxRef(tx_ref) {
@@ -43,7 +38,7 @@ function parseUserIdFromTxRef(tx_ref) {
   return parts[1] || null;
 }
 
-async function flwVerify({ txId }) {
+async function flwVerify(txId) {
   const key = process.env.FLW_SECRET_KEY;
   if (!key) throw new Error("Missing FLW_SECRET_KEY");
 
@@ -68,7 +63,6 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // ✅ DEBUG LOGS (keep for now)
     console.log("WEBHOOK HIT ✅", new Date().toISOString());
     console.log("HEADERS ✅", JSON.stringify(req.headers));
     console.log("BODY ✅", JSON.stringify(req.body));
@@ -78,7 +72,10 @@ module.exports = async (req, res) => {
     const secretHash = getSecretHash();
 
     if (!incomingHash || !secretHash || incomingHash !== secretHash) {
-      console.log("WEBHOOK REJECTED ❌", { incomingHash: !!incomingHash, secretHash: !!secretHash });
+      console.log("WEBHOOK REJECTED ❌ signature mismatch", {
+        incomingHashPresent: !!incomingHash,
+        secretHashPresent: !!secretHash,
+      });
       return res.status(401).json({ error: "Invalid webhook signature" });
     }
 
@@ -90,50 +87,73 @@ module.exports = async (req, res) => {
 
     if (!txId) return res.status(200).json({ ok: true, ignored: "missing tx id" });
 
-    // 2) Verify with Flutterwave (source of truth)
-    const verified = await flwVerify({ txId });
+    // 2) verify with Flutterwave (source of truth)
+    const verified = await flwVerify(txId);
 
-    const status = String(verified?.status || "").toLowerCase();
-    const currency = verified?.currency;
-    const amount = Number(verified?.amount);
+    const status = String(verified?.status || data?.status || "").toLowerCase();
+    const currency = verified?.currency || data?.currency;
+    const amount = Number(verified?.amount ?? data?.amount ?? 0);
     const vTxRef = verified?.tx_ref || txRef;
 
     if (status !== "successful") return res.status(200).json({ ok: true, ignored: "not successful" });
     if (currency !== "NGN") return res.status(200).json({ ok: true, ignored: "currency mismatch" });
 
-    // 3) Extract meta
-    const meta = verified?.meta || data?.meta || {};
+    // 3) meta extraction (Flutterwave sends meta_data in your payload)
+    const meta =
+      verified?.meta ||
+      verified?.meta_data ||
+      body?.meta_data ||
+      data?.meta ||
+      data?.meta_data ||
+      {};
+
     const plan = meta.plan;
     let user_id = meta.user_id || meta.userId || null;
 
-    // fallback: parse from tx_ref
     if (!user_id) user_id = parseUserIdFromTxRef(vTxRef);
 
     if (!user_id) return res.status(200).json({ ok: true, ignored: "missing user_id" });
     if (!plan || !PLAN_MAP[String(plan)]) return res.status(200).json({ ok: true, ignored: "invalid plan" });
 
     const rule = PLAN_MAP[String(plan)];
-    if (amount < rule.amount) return res.status(200).json({ ok: true, ignored: "amount mismatch" });
+
+    // basic amount check
+    if (amount < Number(rule.amount)) {
+      return res.status(200).json({ ok: true, ignored: "amount mismatch" });
+    }
 
     const sb = getSupabaseAdmin();
 
-    // 4) Idempotency: insert credit transaction with unique reference
+    // 4) idempotency + record payment row
+    // Your DB requires NOT NULL amount — so we include amount.
     const reference = `flw:${txId}`;
 
     const { error: insErr } = await sb
       .from("credit_transactions")
-      .insert({ user_id, reference, credits: rule.credits });
+      .insert({
+        user_id,
+        reference,
+        credits: rule.credits,
+        amount, // ✅ REQUIRED by your table (not null)
+        provider: "flutterwave", // if this column exists it will store provider; if not, Supabase will error
+        plan: String(plan),      // same note as above
+        currency,                // same note as above
+      });
+
+    // If your table doesn't have provider/plan/currency columns and it errors,
+    // comment them out and keep only: user_id, reference, credits, amount.
 
     if (insErr) {
       const msg = String(insErr.message || "").toLowerCase();
       if (msg.includes("duplicate")) {
+        console.log("ALREADY CREDITED ⚠️", reference);
         return res.status(200).json({ ok: true, duplicate: true });
       }
       console.log("credit_transactions insert error ❌", insErr);
       return res.status(500).json({ error: "Failed to insert credit transaction", details: insErr.message });
     }
 
-    // 5) Update user credits
+    // 5) update user credits
     const { data: userRow, error: selErr } = await sb
       .from("users")
       .select("credits")
@@ -158,7 +178,7 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: "Failed to update credits", details: updErr.message });
     }
 
-    console.log("CREDITED ✅", { user_id, before, after, added: rule.credits, txId });
+    console.log("CREDITED ✅", { user_id, before, after, added: rule.credits, txId, reference });
 
     return res.status(200).json({ ok: true, user_id, before, after, added: rule.credits, reference });
   } catch (e) {
