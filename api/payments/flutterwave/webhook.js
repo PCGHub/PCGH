@@ -51,9 +51,7 @@ async function flwVerify(txId) {
   });
 
   const json = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    throw new Error(json?.message || "Flutterwave verify failed");
-  }
+  if (!r.ok) throw new Error(json?.message || "Flutterwave verify failed");
   return json?.data;
 }
 
@@ -65,7 +63,7 @@ module.exports = async (req, res) => {
     console.log("HEADERS ✅", JSON.stringify(req.headers));
     console.log("BODY ✅", JSON.stringify(req.body));
 
-    // 1) signature verification
+    // 1) verify webhook signature
     const incomingHash = getIncomingHash(req);
     const secretHash = getSecretHash();
 
@@ -85,16 +83,18 @@ module.exports = async (req, res) => {
 
     if (!txId) return res.status(200).json({ ok: true, ignored: "missing tx id" });
 
-    // 2) verify with Flutterwave
+    // 2) Verify transaction via Flutterwave API (source of truth)
     const verified = await flwVerify(txId);
 
     const status = String(verified?.status || data?.status || "").toLowerCase();
     const amount = Number(verified?.amount ?? data?.amount ?? 0);
+    const currency = String(verified?.currency || data?.currency || "");
     const vTxRef = verified?.tx_ref || txRef;
 
     if (status !== "successful") return res.status(200).json({ ok: true, ignored: "not successful" });
+    if (currency !== "NGN") return res.status(200).json({ ok: true, ignored: "currency mismatch" });
 
-    // 3) meta extraction (Flutterwave sends meta_data)
+    // 3) meta extraction (Flutterwave sends meta_data in your logs)
     const meta = verified?.meta || verified?.meta_data || body?.meta_data || data?.meta_data || data?.meta || {};
 
     const plan = meta.plan;
@@ -106,20 +106,19 @@ module.exports = async (req, res) => {
 
     const rule = PLAN_MAP[String(plan)];
 
-    // amount sanity check
     if (amount < Number(rule.amount)) return res.status(200).json({ ok: true, ignored: "amount mismatch" });
 
     const sb = getSupabaseAdmin();
 
-    // 4) idempotent insert into credit_transactions
-    // IMPORTANT: insert ONLY columns we KNOW exist (avoid schema cache errors)
+    // 4) Insert credit transaction (ONLY required columns to satisfy DB constraints)
     const reference = `flw:${txId}`;
 
     const { error: insErr } = await sb.from("credit_transactions").insert({
       user_id,
       reference,
       credits: rule.credits,
-      amount, // your table requires this NOT NULL ✅
+      amount,
+      transaction_type: "credit_purchase", // ✅ REQUIRED by your DB (NOT NULL)
     });
 
     if (insErr) {
@@ -132,7 +131,7 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: "Failed to insert credit transaction", details: insErr.message });
     }
 
-    // 5) update users.credits
+    // 5) Update users.credits
     const { data: userRow, error: selErr } = await sb
       .from("users")
       .select("credits")
