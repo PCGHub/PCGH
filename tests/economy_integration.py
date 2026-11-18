@@ -290,6 +290,9 @@ assert "error" in rpc(
     {"pin": "wrong"},
 )
 
+assert "error" in rpc(admin, "admin_login", {})
+assert "error" in rpc(admin, "admin_login", {"pin": None})
+assert "error" in rpc(admin, "admin_login", {"pin": ""})
 assert rpc(
     admin,
     "admin_login",
@@ -696,6 +699,19 @@ rpc(
     {"campaign_id": c3},
     True,
 )
+
+rpc(
+    admin,
+    "distribute",
+    {
+        "campaign_id": c3,
+        "audience": "groups",
+        "group_ids": [uid(999)],
+    },
+)
+
+# Users with NULL pod_id must never pass group eligibility.
+rpc(uid(6), "start", {"campaign_id": c3}, True)
 
 rpc(
     admin,
