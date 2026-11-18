@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/payments.test.cjs",
+    "test:economy": "python tests/economy_integration.py",
+    "test:browser": "node tests/browser-smoke.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",
