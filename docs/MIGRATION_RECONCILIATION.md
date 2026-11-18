@@ -116,3 +116,9 @@ This is static schema/privilege acceptance only. It is not a replacement for rea
 ## Staging negative-path authorization acceptance — 2026-11-18
 
 Executed a transactional `SET LOCAL ROLE authenticated` test using a synthetic nonmember JWT subject `11111111-1111-4111-8111-111111111111` and explicit SQL assertions. Verified `campaign_admin()` returns false and `campaign_action('admin_login',...)` and `campaign_action('submit',...)` each raise `Active membership required`. The transaction was rolled back. Exact SQL committed to `tests/staging_negative_auth_acceptance.sql` (commit `91b56b55d80d3406496e688dc0db350a5dbf71ee`). This is a simulated role negative-path test, **not** a real JWT/API or registered-user acceptance test.
+
+## Hosted staging transactional campaign reservation — 2026-11-18
+
+Committed `tests/staging_campaign_reservation.sql` (commit `5ce89faf2021d8d5b0bb0d73fa493b695e1764a2`) and executed the **exact file** on isolated staging `hsicgiikaemesqrdltsh`. Result: `PASS: 500-credit reservation and idempotent replay`. Within a single rolled-back SQL transaction, inserted a synthetic `auth.users` identity and matching 500-credit profile, set role `authenticated` with matching JWT subject, invoked the installed `campaign_action('submit', ...)` twice with the same request ID, and asserted available credits 0, reserved credits 500, one campaign only, and same campaign ID on replay. Transaction ended with `ROLLBACK`; no test data retained.
+
+This is a hosted database role-simulation test, not an external JWT/API or UI acceptance test. Approval, rejection/refund, verification rewards, real PIN login, concurrency and Flutterwave remain untested.
