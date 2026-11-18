@@ -56,3 +56,9 @@ Current new staging project: `hsicgiikaemesqrdltsh` (`PCGH Crowd - Staging`), in
 Staging project ref (non-secret), Preview URL, migration SHA, schema diff, redacted test logs, pass/fail counts, payment provider test references, rollback evidence, and unresolved risks.
 
 Automated baseline: [GitHub Actions recovery validation #2](https://github.com/PCGHub/PCGH/actions/runs/44372000392) — three jobs passed, but mocked browser transport and disposable PostgreSQL do not establish hosted staging readiness.
+
+## Vercel deployment discovery and critical environment isolation gate — 2026-11-18
+
+Verified Vercel team `pcgrowthhub-2263s-projects`, project `pcgh` (`prj_BtwiUdeXdenGIW6W1T1f0cS0fACA`) is linked to `PCGHub/PCGH`. Recovery branch `feature/fixed-campaign-economy-recovery` generated a READY preview deployment at `https://pcgh-brjlzzewf-pcgrowthhub-2263s-projects.vercel.app` (commit `dd0da7e51c66f7cdd40a1fc25c49109add360220`). READY is build status, not verified application/payment acceptance.
+
+**BLOCKER — environment isolation:** Vercel environment-variable metadata shows `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`, `FLW_SECRET_KEY`, `ADMIN_PIN`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `FLW_WEBHOOK_SECRET_HASH` all target production, preview, and development together. Two secret entries carry `readable-secret` warnings. Values were not decrypted. Do not assume preview uses isolated Supabase staging or Flutterwave sandbox. Configure branch-scoped preview variables for the recovery branch using staging project `hsicgiikaemesqrdltsh` and sandbox-only Flutterwave credentials, protect server secrets, then redeploy and verify effective backend identities before real-user or payment tests. Do not overwrite shared production values or promote this branch to production before this gate passes.
