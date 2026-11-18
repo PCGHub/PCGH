@@ -11,6 +11,26 @@ Date: 2026-11-18. Status: **blocked pending baseline rehearsal**. Target isolate
 5. **004 introduces a SECURITY DEFINER `is_admin()` helper.** Review its `search_path`, grants and callers. Do not expose privileged functions to anonymous roles without explicit reason.
 6. **New fixed-economy migration is not a substitute for a full baseline test.** Prior CI used a minimal historical schema and mocked browser/payment transport.
 
+## Update: authentic 003 recovered from Git history (2026-11-18)
+
+The GitHub path history shows commit `95311beb16107d0069c79991cd3a82e8715d1309` ("remove paystack, switch to flutterwave frontend") overwrote migration 003. The earlier commit `6aecbb1d48a6fa892784308c53a44defbccf5146` and its later parent `c2720d573fbd8ab1a84be1c55c8d507cd0179acb` both contain the **same authentic original SQL**:
+
+```sql
+ALTER TABLE users ALTER COLUMN credits SET DEFAULT 150;
+
+CREATE POLICY "Users can update own payments"
+  ON payments FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+```
+
+Original source: https://github.com/PCGHub/PCGH/blob/c2720d573fbd8ab1a84be1c55c8d507cd0179acb/supabase/migrations/20260205225347_003_update_default_credits_and_payments_policy.sql
+
+**Important:** The historic default of 150 conflicts with the new agreed **zero-credit signup** economy. The final staging schema MUST explicitly reset `public.users.credits` default to 0 and ensure no signup trigger grants welcome credits. The historic client-writable `payments` UPDATE policy is also unsafe for settlement; ensure the final schema revokes this write path. Recovering original SQL does **not** mean it is safe to deploy the legacy permissions as final state.
+
+Do not rewrite the corrupted 003 in-place on the recovery branch: it may be recorded as applied on older hosted systems. Instead, use a separately reviewed staging bootstrap manifest that references the original historical commit and a final reconciliation migration; validate against a disposable Supabase-compatible instance before applying hosted SQL.
+
 ## Recommended non-destructive resolution
 
 - Preserve the original 003 file and its SHA for historical audit. It is a corrupt source artifact, not an executable migration.
