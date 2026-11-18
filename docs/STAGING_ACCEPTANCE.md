@@ -2,6 +2,14 @@
 
 Status: **prepared, not executed**. Do not point these steps at the production PCGH Supabase project or live Flutterwave credentials.
 
+## Discovered baseline migration blocker (2026-11-18)
+
+**Do not apply the checked-in migrations as an uninterrupted sequence.** The historical file `supabase/migrations/20260205225347_003_update_default_credits_and_payments_policy.sql` contains JavaScript (`/async function startFlutterwavePayment()`) rather than SQL. It is not a valid PostgreSQL migration. The successful disposable PostgreSQL test intentionally loads only migration 001, migration 011, and the new fixed-economy migration, with an ad hoc admin-column bridge; therefore it does **not** certify the full historical 001–015 chain.
+
+Before staging DDL, prepare a reviewed baseline reconciliation: document the actual intended historical schema changes for 003, decide how to quarantine the invalid historical artifact without rewriting production history, inspect all migrations 001–015 for dependency and RLS conflicts, and test the exact planned sequence on a disposable Supabase-compatible database. Never silently skip 003 while recording it as applied; never replace it with invented SQL. Obtain a fresh approval for the resolved staging migration plan.
+
+Current new staging project: `hsicgiikaemesqrdltsh` (`PCGH Crowd - Staging`), initially 0 public tables and 0 migrations, PostgreSQL 17.12. **No hosted SQL applied during this discovery.**
+
 ## Environment identity and approval
 - [ ] Record the staging Supabase project name, ref, organization, and region; confirm it is NOT the production project.
 - [ ] Record staging Vercel project or Preview deployment URL; verify it uses the recovery branch.
