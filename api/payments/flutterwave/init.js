@@ -1,78 +1,149 @@
-// api/payments/flutterwave/init.js
+const { createClient } = require("@supabase/supabase-js");
+const { randomUUID } = require("node:crypto");
 
-const { fetch: undiciFetch } = require("undici");
-
-// Define once
-const PLAN_MAP = {
-  starter_pack: { amount: 1000, credits: 500 },
-  growth_pack: { amount: 1800, credits: 1000 },
-  pro_pack: { amount: 4000, credits: 2500 },
+const PLANS = {
+  starter_pack: 500,
+  growth_pack: 1000,
+  pro_pack: 2500,
 };
 
-// Use global fetch if available, else undici
-const _fetch = globalThis.fetch || undiciFetch;
-
 module.exports = async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+    const {
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+      FLW_SECRET_KEY,
+      APP_URL,
+    } = process.env;
 
-    const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
-    const APP_URL = process.env.APP_URL;
-
-    if (!FLW_SECRET_KEY) return res.status(500).json({ error: "Missing FLW_SECRET_KEY on server" });
-    if (!APP_URL) return res.status(500).json({ error: "Missing APP_URL on server" });
-
-    const { plan, user_id, email, name } = req.body || {};
-    if (!plan || !user_id || !email) {
-      return res.status(400).json({ error: "Missing plan, user_id or email" });
-    }
-
-    const rule = PLAN_MAP[String(plan)];
-    if (!rule) return res.status(400).json({ error: "Invalid plan" });
-
-    const tx_ref = `pcgh_${user_id}_${Date.now()}`;
-
-    const payload = {
-      tx_ref,
-      amount: rule.amount,
-      currency: "NGN",
-      redirect_url: `${APP_URL}/buy-credits?status=processing&tx_ref=${encodeURIComponent(tx_ref)}`,
-      customer: { email, name: name || "PCGH User" },
-      customizations: {
-        title: "PCGH Credits",
-        description: `Purchase ${rule.credits} credits (${plan})`,
-      },
-      meta: { user_id, plan, credits: rule.credits },
-    };
-
-    const r = await _fetch("https://api.flutterwave.com/v3/payments", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${FLW_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await r.json().catch(() => ({}));
-
-    if (!r.ok) {
-      console.error("FLW_INIT_HTTP_ERROR:", r.status, data);
-      return res.status(500).json({
-        error: "Flutterwave init failed",
-        details: data?.message || data,
+    if (
+      ![
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+        FLW_SECRET_KEY,
+        APP_URL,
+      ].every(Boolean)
+    ) {
+      return res.status(503).json({
+        error: "Checkout is not configured",
       });
     }
 
-    const link = data?.data?.link;
-    if (!link) {
-      console.error("FLW_INIT_NO_LINK:", data);
-      return res.status(500).json({ error: "No checkout link returned by Flutterwave" });
+    const sb = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          persistSession: false,
+        },
+      },
+    );
+
+    const token = (req.headers.authorization || "").replace(
+      /^Bearer /,
+      "",
+    );
+
+    const {
+      data: { user },
+      error: authError,
+    } = await sb.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({
+        error: "Sign in to purchase credits",
+      });
     }
 
-    return res.status(200).json({ link, tx_ref });
-  } catch (e) {
-    console.error("FLW_INIT_ERROR:", e);
-    return res.status(500).json({ error: "Server error", details: String(e?.message || e) });
+    const { plan, credits: custom } = req.body || {};
+
+    const credits =
+      plan === "custom" ? Number(custom) : PLANS[plan];
+
+    if (
+      !Number.isInteger(credits) ||
+      credits < 100 ||
+      credits > 100000
+    ) {
+      return res.status(400).json({
+        error: "Choose 100–100,000 whole credits",
+      });
+    }
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await sb
+      .from("users")
+      .select("is_active")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile?.is_active) {
+      return res.status(403).json({
+        error: "An active member profile is required",
+      });
+    }
+
+    const tx_ref = `pcgh_${randomUUID()}`;
+
+    const { error } = await sb.from("credit_orders").insert({
+      reference: tx_ref,
+      user_id: user.id,
+      credits,
+      amount_naira: credits,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const response = await fetch(
+      "https://api.flutterwave.com/v3/payments",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tx_ref,
+          amount: credits,
+          currency: "NGN",
+          redirect_url: `${APP_URL}/buy-credits?status=processing`,
+          customer: {
+            email: user.email,
+          },
+          customizations: {
+            title: "PCGH Credits",
+            description: `Purchase ${credits} credits`,
+          },
+        }),
+      },
+    );
+
+    const json = await response.json();
+
+    if (!response.ok || !json?.data?.link) {
+      throw new Error("Payment provider unavailable");
+    }
+
+    return res.status(200).json({
+      link: json.data.link,
+      tx_ref,
+    });
+  } catch (error) {
+    console.error(
+      "Checkout initialization failed:",
+      error.message,
+    );
+
+    return res.status(502).json({
+      error: "Unable to initialize checkout. Please try again.",
+    });
   }
 };
