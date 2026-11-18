@@ -9,7 +9,16 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    sans-serif;
   background: #f9fafb;
   color: #1f2937;
   -webkit-font-smoothing: antialiased;
@@ -20,23 +29,49 @@ button {
   transition: all 0.2s ease;
 }
 
-input, textarea, select {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+input,
+textarea,
+select {
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulse-once {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.2); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(59, 130, 246, 0.2);
+  }
 }
 
 .animate-fade-in {
@@ -55,5 +90,25 @@ input, textarea, select {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@layer components {
+  main input:not([type="checkbox"]),
+  main textarea,
+  main select {
+    @apply w-full border border-gray-300 rounded-xl p-3 bg-white text-gray-900 focus:ring-2 focus:ring-emerald-500;
+  }
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #059669;
+  outline-offset: 3px;
+}
+
+progress {
+  height: 0.65rem;
+  border-radius: 999px;
   overflow: hidden;
 }
