@@ -55,3 +55,11 @@ Do not rewrite the corrupted 003 in-place on the recovery branch: it may be reco
 - Staging project created and verified active; PostgreSQL 17.12, initially zero public tables and zero migrations.
 - All 16 checked-in migration files enumerated; key security-relevant files 002, 004–008, 012–015 and 20261117 inspected.
 - **No hosted migrations or data changes performed during this audit.**
+
+## Hosted staging execution log — 2026-11-18
+
+User authorized proceeding with staging migration rehearsal. Applied successfully to **isolated staging** `hsicgiikaemesqrdltsh`: historical 001, 002; recovered authentic 003 from Git commit `c2720d573fbd8ab1a84be1c55c8d507cd0179acb`; historical 004, 005; a **staging-safe 006** containing only `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS admin_pin text DEFAULT NULL` (the checked-in 006 was blocked because it sets a known plaintext PIN); historical 007, 008, 009, 010, 011. Every applied step returned success. Public tables now: users, links, tasks, task_completions, credit_transactions, user_pods, pod_rotations, payments, task_attempts, ad_campaigns, ad_campaign_metrics (all RLS enabled, all 0 rows).
+
+**Stopped at historical 012** (`20260207113346_012_fix_performance_and_security_issues.sql`) after the migration engine returned `42P01: relation \"public.ad_creatives\" does not exist`. The 011 migration creates `ad_campaigns` and `ad_campaign_metrics` but does not create `ad_creatives`; 012 assumes the latter already exists. Do not fabricate its structure or mark 012 applied. Migrations 012–015 and the 20261117 fixed-economy migration have **not** been applied. No application is connected to this staging database yet. Until the final economy migration is applied, the historical 150-credit default and legacy RLS remain; staging must not be opened to testers or connected to payment endpoints.
+
+**Next:** Search repository history for the missing `ad_creatives` schema and its authentic creation migration; reconcile the 011/012 mismatch. Only then continue the ordered migrations and verify final zero-credit signup, profile restrictions, admin PIN security, payment and ledger rules. No production changes.
