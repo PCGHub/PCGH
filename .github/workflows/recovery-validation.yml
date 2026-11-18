@@ -1,0 +1,103 @@
+name: PCGH recovery validation
+
+on:
+  push:
+    branches:
+      - feature/fixed-campaign-economy-recovery
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pcgh-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-and-payments:
+    name: Frontend build and payment tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies (recovery branch)
+        run: npm install --no-package-lock --ignore-scripts
+      - name: Payment tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://pcgh-test.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-not-a-secret
+
+  isolated-postgres:
+    name: Disposable PostgreSQL economy integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start disposable database
+        run: |
+          docker run -d --name pcgh-test-db \
+            -e POSTGRES_PASSWORD=ci-only-password \
+            -e POSTGRES_USER=postgres \
+            postgres:16
+          for i in $(seq 1 45); do
+            if docker exec pcgh-test-db pg_isready -U postgres; then exit 0; fi
+            sleep 2
+          done
+          docker logs pcgh-test-db
+          exit 1
+      - name: Compile Python test
+        run: python -m py_compile tests/economy_integration.py
+      - name: Run isolated migration and economy integration
+        run: python tests/economy_integration.py pcgh-test-db
+      - name: Database diagnostics on failure
+        if: failure()
+        run: docker logs pcgh-test-db || true
+      - name: Stop disposable database
+        if: always()
+        run: docker rm -f pcgh-test-db || true
+
+  browser-smoke:
+    name: Mocked browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install app and Playwright test runner
+        run: |
+          npm install --no-package-lock --ignore-scripts
+          npm install --no-save --no-package-lock --ignore-scripts playwright
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium
+      - name: Start preview server
+        env:
+          VITE_SUPABASE_URL: https://pcgh-test.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-not-a-secret
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5174 > /tmp/pcgh-vite.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:5174/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/pcgh-vite.log
+          exit 1
+      - name: Run browser smoke tests
+        env:
+          CHROMIUM_PATH: /usr/bin/chromium
+        run: npm run test:browser
+      - name: Server diagnostics on failure
+        if: failure()
+        run: cat /tmp/pcgh-vite.log || true
