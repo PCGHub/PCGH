@@ -1,228 +1,221 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { Zap, TrendingUp, Award, Wallet, ArrowRight, CreditCard, AlertCircle } from 'lucide-react'
-import { API } from '../lib/api'
-import { StatSkeleton } from '../components/Skeleton'
+import { Link } from "react-router-dom";
+import {
+  member,
+  rows,
+  ownCampaigns,
+} from "../lib/campaigns";
+import {
+  number,
+  campaignStatus,
+} from "../lib/economy";
+import {
+  Page,
+  Card,
+  Stats,
+  Allowance,
+  CampaignCard,
+  useLoad,
+} from "../components/CampaignUI";
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null)
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const state = useLoad(async () => {
+    const user = await member();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const authUser = await API.getCurrentUser()
-        const profile = await API.getUserProfile(authUser.id)
-        if (!profile) return
-        setUser(profile)
-        setStats({
-          credits: Number(profile.credits) || 0,
-          earned: Number(profile.total_earned_credits) || 0,
-          spent: Number(profile.total_spent_credits) || 0,
-          tasksCompleted: Number(profile.completed_tasks_count) || 0,
-          linksSubmitted: Number(profile.submitted_links_count) || 0,
-          reputation: Number(profile.reputation_score) || 0
-        })
-      } catch (err) {
-        console.error('Error fetching data:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [])
+    const campaigns =
+      await ownCampaigns(user.id);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <div className="h-10 w-64 bg-gray-200 rounded-lg animate-pulse mb-2" />
-            <div className="h-5 w-48 bg-gray-200 rounded-lg animate-pulse" />
-          </div>
-          <div className="h-40 bg-gray-200 rounded-2xl animate-pulse mb-8" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[1, 2, 3].map(i => <StatSkeleton key={i} />)}
-          </div>
-        </div>
-      </div>
-    )
-  }
+    return {
+      user,
+      campaigns,
+    };
+  });
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="mx-auto text-red-400 mb-3" size={40} />
-          <p className="text-gray-700 font-medium">Failed to load dashboard</p>
-        </div>
-      </div>
-    )
-  }
+  const user = state.data?.user;
+  const campaigns = state.data?.campaigns || [];
+
+  const telegram =
+    import.meta.env.VITE_TELEGRAM_COMMUNITY_URL;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {user.full_name || user.username}
-          </h1>
-          <p className="text-gray-500 mt-1">Here's your growth overview</p>
-        </div>
+    <Page
+      title={
+        user
+          ? `Welcome back, ${
+              user.full_name || user.username
+            }`
+          : "Dashboard"
+      }
+      description="Your campaigns, credits, and earning progress."
+      {...state}
+    >
+      {user && (
+        <>
+          <section className="bg-gray-900 text-white rounded-2xl p-6">
+            <p>Available Credits</p>
 
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl p-8 text-white mb-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/20 to-emerald-500/20 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl" />
-          <div className="relative flex justify-between items-start">
-            <div>
-              <p className="text-gray-400 text-sm font-medium">Available Credits</p>
-              <p className="text-5xl font-bold mt-2 tracking-tight">{stats.credits}</p>
-              <p className="text-gray-400 mt-4 text-sm">1 credit = 1 engagement action</p>
+            <strong className="text-4xl block my-2">
+              {number(user.credits)}
+            </strong>
+
+            <p className="text-gray-300">
+              {number(user.reserved_credits)} reserved
+              · Each campaign costs 500 credits
+            </p>
+
+            <div className="flex gap-4 mt-4">
+              <Link
+                to="/submit"
+                className="bg-emerald-600 rounded-xl px-4 py-2"
+              >
+                Submit Campaign
+              </Link>
+
+              <Link
+                to="/buy-credits"
+                className="border border-gray-500 rounded-xl px-4 py-2"
+              >
+                Buy Credits
+              </Link>
             </div>
-            <Wallet className="w-14 h-14 text-gray-600" />
+          </section>
+
+          <Stats
+            items={[
+              [
+                "Verified Tasks",
+                user.completed_tasks_count,
+              ],
+              [
+                "Lifetime Task Rewards",
+                number(user.total_earned_credits) +
+                  " credits",
+              ],
+              [
+                "Active Campaigns",
+                campaigns.filter(
+                  (campaign) =>
+                    campaignStatus(campaign) ===
+                    "active",
+                ).length,
+              ],
+              [
+                "Pending Approval",
+                campaigns.filter(
+                  (campaign) =>
+                    campaign.status ===
+                    "pending_approval",
+                ).length,
+              ],
+            ]}
+          />
+
+          <Allowance user={user} />
+
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              [
+                "/tasks",
+                "Complete Tasks",
+                "Earn 2 credits per verified task",
+              ],
+              [
+                "/links",
+                "My Campaigns",
+                "Track progress and settlement",
+              ],
+              [
+                "/profile",
+                "Credit History",
+                "See purchases, rewards, and refunds",
+              ],
+            ].map(([to, title, description]) => (
+              <Link to={to} key={to}>
+                <Card>
+                  <h2 className="font-bold">
+                    {title} →
+                  </h2>
+
+                  <p className="text-sm text-gray-600 mt-2">
+                    {description}
+                  </p>
+                </Card>
+              </Link>
+            ))}
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-xs font-medium">Tasks Completed</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.tasksCompleted}</p>
-              </div>
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Zap className="text-blue-600" size={20} />
-              </div>
-            </div>
-          </div>
+          <h2 className="text-xl font-bold">
+            Recent campaigns
+          </h2>
 
-          <div className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-xs font-medium">Credits Earned</p>
-                <p className="text-2xl font-bold text-green-600 mt-1">+{stats.earned}</p>
-              </div>
-              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                <TrendingUp className="text-green-600" size={20} />
-              </div>
-            </div>
-          </div>
+          {campaigns.slice(0, 3).map((campaign) => (
+            <CampaignCard
+              campaign={campaign}
+              key={campaign.id}
+            />
+          ))}
 
-          <div className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-xs font-medium">Links Submitted</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.linksSubmitted}</p>
-              </div>
-              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-                <Award className="text-amber-600" size={20} />
-              </div>
-            </div>
-          </div>
-        </div>
+          {!campaigns.length && (
+            <Card>
+              No campaigns yet.{" "}
+              <Link
+                className="text-emerald-800 underline"
+                to="/submit"
+              >
+                Submit your first campaign
+              </Link>
+              .
+            </Card>
+          )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Link
-            to="/tasks"
-            className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md hover:border-blue-200 transition group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">Complete Tasks</h3>
-                <p className="text-gray-500 text-xs mt-0.5">Earn credits</p>
-              </div>
-              <ArrowRight className="text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" size={18} />
-            </div>
-          </Link>
+          <Card>
+            <h2 className="font-bold mb-3">
+              How It Works
+            </h2>
 
-          <Link
-            to="/submit"
-            className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md hover:border-emerald-200 transition group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">Submit Link</h3>
-                <p className="text-gray-500 text-xs mt-0.5">Get engagement</p>
-              </div>
-              <ArrowRight className="text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" size={18} />
-            </div>
-          </Link>
+            <ol className="list-decimal pl-5 space-y-2">
+              <li>Fund your balance.</li>
 
-          <Link
-            to="/links"
-            className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md hover:border-amber-200 transition group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">My Links</h3>
-                <p className="text-gray-500 text-xs mt-0.5">Track progress</p>
-              </div>
-              <ArrowRight className="text-gray-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" size={18} />
-            </div>
-          </Link>
-
-          <Link
-            to="/buy-credits"
-            className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md hover:border-blue-200 transition group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">Buy Credits</h3>
-                <p className="text-gray-500 text-xs mt-0.5">Top up balance</p>
-              </div>
-              <ArrowRight className="text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" size={18} />
-            </div>
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-4">How It Works</h3>
-            <ol className="space-y-3 text-sm text-gray-600">
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-                Complete tasks from others to earn credits
+              <li>
+                Submit a campaign for 500 credits.
               </li>
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-                Submit your links and spend credits
+
+              <li>
+                Admin reviews and distributes it.
               </li>
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                Get real engagement from real people
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
-                Scale your growth sustainably
+
+              <li>
+                Complete other campaigns’ eligible
+                tasks to earn toward your next
+                submission.
               </li>
             </ol>
-          </div>
+          </Card>
 
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-4">Account Info</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-500">Reputation</span>
-                <span className="text-sm font-semibold text-gray-900">{stats.reputation}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-500">Tier</span>
-                <span className="text-sm font-semibold text-gray-900 capitalize">{user.tier}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-500">Credits Spent</span>
-                <span className="text-sm font-semibold text-red-600">-{stats.spent}</span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-500">Member Since</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {user.joined_at ? new Date(user.joined_at).toLocaleDateString() : 'Recently'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+          {telegram &&
+            /^https:\/\/t\.me\//.test(telegram) && (
+              <Card>
+                <h2 className="font-bold">
+                  Join our Telegram community
+                </h2>
+
+                <p className="my-2">
+                  Optional announcements and support.
+                  Essential campaign updates remain
+                  here.
+                </p>
+
+                <a
+                  className="text-emerald-800 underline"
+                  href={telegram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Join Telegram ↗
+                </a>
+              </Card>
+            )}
+        </>
+      )}
+    </Page>
+  );
 }
