@@ -106,3 +106,9 @@ Inspected live staging `information_schema.columns`, `pg_policies`, role column 
 - Installed `campaign_action` requires `auth.uid()`, checks active membership, rejects empty PIN and absent PIN hash, and uses `campaign_admin()` for privileged approve/reject/distribute/review/settle/access/adjust/admin_pin/manage_admin actions. `start` checks group `pod_id IS NOT NULL`, ownership, allowance and claim slot limits. `submit` reserves 500 credits, `approve` charges reserved 500 and unlocks 200 earning allowance, `reject` releases 500, `review` pays 2 per verified claim, `settle` refunds unused reward pool. This is **code inspection only**, not execution proof.
 
 **Remaining acceptance gap:** no actual signed-in staging users, so no role-impersonated end-to-end test of signup, PIN lockout, claim visibility, concurrent claims, payments, or refunds. Do not report those as passing. Confirm intended frontend use of legacy `payments` table before promoting payment lockdown to production.
+
+## Reusable static staging acceptance test — 2026-11-18
+
+Created `tests/staging_readonly_acceptance.sql` on the recovery branch (commit `9dcc5581824443c66f88ac20ee1f073b0995133b`). Executed **that exact committed SQL** against isolated staging `hsicgiikaemesqrdltsh` using the database SQL executor. Result: `PASS: static staging acceptance assertions`. Checks include zero signup credit default, protected credit/admin columns, no authenticated writes to legacy payments, no payment write policies, restricted anonymous campaign RPC and authenticated payment settlement, and no anonymous execution of legacy maintenance/trigger functions.
+
+This is static schema/privilege acceptance only. It is not a replacement for real-user role-based workflow tests, actual authentication, PIN lockout, group eligibility, payment sandbox, concurrency, or browser smoke tests.
