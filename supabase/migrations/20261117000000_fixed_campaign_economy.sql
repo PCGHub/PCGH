@@ -851,17 +851,17 @@ BEGIN
    RAISE EXCEPTION 'Campaign is closed';
   END IF;
 
-  IF c.audience<>'community'
-   AND NOT(uid=ANY(c.recipients))
-   AND NOT(coalesce(c.audience='groups' AND u.pod_id IS NOT NULL AND u.pod_id=ANY(c.group_ids),false))
-  THEN
-   RAISE EXCEPTION 'This campaign is not assigned to you';
-  END IF;
-
   SELECT *
   INTO u
   FROM users
   WHERE id=uid;
+
+  IF c.audience<>'community'
+   AND NOT(coalesce(uid=ANY(c.recipients),false))
+   AND NOT(coalesce(c.audience='groups' AND u.pod_id IS NOT NULL AND u.pod_id=ANY(c.group_ids),false))
+  THEN
+   RAISE EXCEPTION 'This campaign is not assigned to you';
+  END IF;
 
   IF u.earning_allowance-u.earning_reserved<2 THEN
    RAISE EXCEPTION
