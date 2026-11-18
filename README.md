@@ -1,5 +1,17 @@
 # PCGH - People-Powered Community Growth Hub
 
+## Current campaign model
+
+A campaign costs **500 credits**: **300 platform fee + 200 reward pool**.
+Each verified task pays **2 credits**, with a target of **100 unique completions**
+and a seven-day window from admin approval. An approved campaign unlocks
+200 credits of earning allowance toward future campaigns. Credits cost ₦1 each
+and cannot be withdrawn as cash.
+
+See [implementation, tests, and rollout instructions](docs/IMPLEMENTATION.md).
+The strategy and pricing material below describes the earlier MVP.
+
+
 A community-driven growth platform where users help each other grow through real human engagement, not bots.
 
 ## 🎯 What is PCGH?
