@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function AdsManager() {
+  const [saving, setSaving] = useState(false);
   const [user, setUser] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +67,7 @@ export default function AdsManager() {
       const { data, error } = await supabase
         .from('ad_campaigns')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -79,10 +81,17 @@ export default function AdsManager() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-
+    if (saving) return;
+    if (!Number.isFinite(Number(formData.budget)) || Number(formData.budget) < 0 || (formData.end_date && formData.end_date < formData.start_date)) {
+      alert('Enter a valid budget and an end date on or after the start date.');
+      return;
+    }
+    setSaving(true);
     try {
       const campaignData = {
         title: formData.title,
+        name: formData.title,
+        objective: editingCampaign?.objective || 'traffic',
         description: formData.description || null,
         platform: formData.platform,
         budget: parseFloat(formData.budget) || 0,
@@ -91,7 +100,7 @@ export default function AdsManager() {
         end_date: formData.end_date || null,
         target_audience: formData.target_audience,
         ad_copy: formData.ad_copy || null,
-        tracking_link: generateTrackingLink(formData.title, formData.platform),
+        tracking_link: editingCampaign?.tracking_link || null,
         status: formData.status,
         notes: formData.notes || null
       };
@@ -122,7 +131,9 @@ export default function AdsManager() {
       loadCampaigns();
     } catch (error) {
       console.error('Error saving campaign:', error);
-      alert('Error saving campaign. Please try again.');
+      alert('Error saving ad plan. Please try again.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -248,7 +259,7 @@ export default function AdsManager() {
       color: 'green',
       steps: [
         'Go to Google Ads (ads.google.com)',
-        'Click "New Campaign" in the left menu',
+        'Click "New Ad Plan" in the left menu',
         'Select your campaign goal (Sales, Leads, Traffic, etc.)',
         'Choose campaign type (Search, Display, Video, Shopping, etc.)',
         'Set your geographic targeting and languages',
@@ -388,8 +399,8 @@ export default function AdsManager() {
 
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Ads Manager</h1>
-            <p className="text-slate-600 mt-1">Plan and organize your advertising campaigns</p>
+            <h1 className="text-3xl font-bold text-slate-900">Ad Planner</h1>
+            <p className="text-slate-600 mt-1">Plan advertising campaigns to launch on external platforms</p>
           </div>
           <button
             onClick={() => {
@@ -679,7 +690,7 @@ export default function AdsManager() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Budget *
+                    Planned external ad spend *
                   </label>
                   <div className="flex gap-2">
                     <select
