@@ -112,3 +112,7 @@ Inspected live staging `information_schema.columns`, `pg_policies`, role column 
 Created `tests/staging_readonly_acceptance.sql` on the recovery branch (commit `9dcc5581824443c66f88ac20ee1f073b0995133b`). Executed **that exact committed SQL** against isolated staging `hsicgiikaemesqrdltsh` using the database SQL executor. Result: `PASS: static staging acceptance assertions`. Checks include zero signup credit default, protected credit/admin columns, no authenticated writes to legacy payments, no payment write policies, restricted anonymous campaign RPC and authenticated payment settlement, and no anonymous execution of legacy maintenance/trigger functions.
 
 This is static schema/privilege acceptance only. It is not a replacement for real-user role-based workflow tests, actual authentication, PIN lockout, group eligibility, payment sandbox, concurrency, or browser smoke tests.
+
+## Staging negative-path authorization acceptance — 2026-11-18
+
+Executed a transactional `SET LOCAL ROLE authenticated` test using a synthetic nonmember JWT subject `11111111-1111-4111-8111-111111111111` and explicit SQL assertions. Verified `campaign_admin()` returns false and `campaign_action('admin_login',...)` and `campaign_action('submit',...)` each raise `Active membership required`. The transaction was rolled back. Exact SQL committed to `tests/staging_negative_auth_acceptance.sql` (commit `91b56b55d80d3406496e688dc0db350a5dbf71ee`). This is a simulated role negative-path test, **not** a real JWT/API or registered-user acceptance test.
