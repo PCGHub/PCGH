@@ -1,29 +1,39 @@
-// src/lib/flutterwave.js
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { supabase } from "./supabase";
 
-export async function initFlutterwavePayment({ plan, user_id, email, name }) {
-  const url = `${API_BASE}/api/payments/flutterwave/init`;
+export async function initFlutterwavePayment({
+  plan,
+  credits,
+}) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan, user_id, email, name }),
-  });
-
-  const json = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const msg =
-      json?.error ||
-      json?.message ||
-      json?.details ||
-      "Flutterwave init failed";
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  if (!session) {
+    throw new Error("Please sign in");
   }
 
-  if (!json?.link) {
-    throw new Error("Flutterwave init did not return a payment link.");
+  const response = await fetch(
+    `${import.meta.env.VITE_API_BASE_URL || ""}/api/payments/flutterwave/init`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        plan,
+        credits,
+      }),
+    },
+  );
+
+  const json = await response.json().catch(() => ({}));
+
+  if (!response.ok || !json.link) {
+    throw new Error(
+      json.error || "Checkout unavailable",
+    );
   }
 
-  return json; // { link, tx_ref }
+  return json;
 }
