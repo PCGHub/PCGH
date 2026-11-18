@@ -56,7 +56,7 @@ export default function Signup() {
         <div className="text-center mb-8">
           <img src="/whatsapp_image_2026-02-05_at_3.45.19_pm.jpeg" alt="PCGH Logo" className="h-16 w-auto object-contain mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-gray-900">Join PCGH</h1>
-          <p className="text-gray-600 mt-2">Start earning credits today</p>
+          <p className="text-gray-600 mt-2">Join the community and launch your first campaign</p>
         </div>
 
         {error && (
@@ -148,14 +148,14 @@ export default function Signup() {
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700 space-y-2">
-            <p className="font-semibold">Welcome bonus:</p>
+            <p className="font-semibold">How credits work:</p>
             <div className="flex items-center gap-2">
               <Check size={16} />
-              <span>150 free credits to start</span>
+              <span>Campaigns cost 500 credits</span>
             </div>
             <div className="flex items-center gap-2">
               <Check size={16} />
-              <span>Earn more by completing tasks</span>
+              <span>Each approved campaign unlocks up to 200 credits to earn</span>
             </div>
           </div>
 
