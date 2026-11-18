@@ -86,3 +86,13 @@ REVOKE INSERT, UPDATE, DELETE ON public.payments FROM anon, authenticated;
 Read-only verification returned **18 public tables**, **0 user rows**, signup `users.credits` default **0**, and **0 payments write policies**. Privilege checks: `authenticated` payment INSERT false, UPDATE false; `anon` campaign_action EXECUTE false; `authenticated` settle_credit_order EXECUTE false.
 
 **Not yet validated:** real authenticated RLS session tests, null/default PIN and pod bypass tests, migration equivalence to production, webhook sandbox idempotency, frontend connection, staging auth configuration, full end-to-end smoke tests, pg_cron maintenance scheduling. Do not mark staging ready for real testers or production promotion yet. Production untouched.
+
+## Staging acceptance security preflight — 2026-11-18
+
+Verified **17 applied migrations** prior to this preflight (including reconciled history and final zero-credit/payment-lockdown migration). Supabase health advisor returned no findings. Security advisor identified four anonymously executable SECURITY DEFINER functions: `expire_stale_links()`, `is_admin()`, `update_ad_campaign_updated_at()`, `update_updated_at_column()`.
+
+Applied staging migration `staging_restrict_legacy_security_definer_rpc`: revoked PUBLIC/anon/authenticated execution on expire_stale_links and both trigger functions; revoked PUBLIC/anon on is_admin and retained authenticated execute because legacy RLS uses it. Verified role privileges via `has_function_privilege`: anon false for all four; authenticated false for maintenance/trigger functions, true for is_admin. Subsequent security advisor no longer flags anonymous SECURITY DEFINER functions. Remaining warnings are four authenticated-executable functions (`campaign_action`, `campaign_admin`, `campaign_progress`, `is_admin`), requiring function-body authorization testing. One INFO: `admin_sessions` has RLS with no policies (intentional deny-by-default; verify service-side access).
+
+Supabase security lint references: https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable and https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable.
+
+**Next acceptance tasks:** role-impersonated SQL/REST tests, signup with zero credits, admin PIN null/default rejection, pod eligibility bypass, campaign credit conservation and refunds, Flutterwave sandbox webhook idempotency, frontend preview integration. No claim of end-to-end readiness.
