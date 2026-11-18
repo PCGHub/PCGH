@@ -69,3 +69,20 @@ User authorized proceeding with staging migration rehearsal. Applied successfull
 Inspected the complete recovery-branch repository tree (commit `86a89529aeaa9b65fd06f3f38fbb7dca7213761c`) and the GitHub history for migration 011. Migration 011 has only the initial-copy commit `6aecbb1d48a6fa892784308c53a44defbccf5146`, and creates `ad_campaigns` and `ad_campaign_metrics`, **not** `ad_creatives`. The frontend `src/pages/AdsManager.jsx` does not reference `ad_creatives`. Historical migrations 012–015 each reference this absent table in RLS policies. No trustworthy CREATE TABLE definition was located in the checked-in migrations. GitHub code search returned incomplete results, so absence across all history cannot be asserted.
 
 **Resolution decision:** Do **not** invent a schema for `ad_creatives` merely to make migrations pass. The next safe change is a reviewed staging-specific baseline patch that omits only the dead `ad_creatives` policy blocks in 012–015, while retaining the rest of each migration and preserving the original source SQL unchanged. This needs an exact block-by-block diff, a dry-run and role-level security tests. No hosted migration 012 or later has been applied.
+
+## Hosted staging migration completion — 2026-11-18
+
+**Applied successfully to isolated staging** `hsicgiikaemesqrdltsh`:
+- Staging-reconciled historical 012–015, omitting orphan `ad_creatives` policy blocks and making trigger recreation safe. Exact combined SQL committed as `docs/staging-reconciled-012-015.sql` on the recovery branch. Each migration returned success.
+- Original `20261117000000_fixed_campaign_economy.sql` returned success.
+- Final staging-only reconciliation migration `staging_final_zero_welcome_and_payment_lockdown` returned success, with SQL:
+```sql
+ALTER TABLE public.users ALTER COLUMN credits SET DEFAULT 0;
+DROP POLICY IF EXISTS "Users can update own payments" ON public.payments;
+DROP POLICY IF EXISTS "Users can insert payments" ON public.payments;
+REVOKE INSERT, UPDATE, DELETE ON public.payments FROM anon, authenticated;
+```
+
+Read-only verification returned **18 public tables**, **0 user rows**, signup `users.credits` default **0**, and **0 payments write policies**. Privilege checks: `authenticated` payment INSERT false, UPDATE false; `anon` campaign_action EXECUTE false; `authenticated` settle_credit_order EXECUTE false.
+
+**Not yet validated:** real authenticated RLS session tests, null/default PIN and pod bypass tests, migration equivalence to production, webhook sandbox idempotency, frontend connection, staging auth configuration, full end-to-end smoke tests, pg_cron maintenance scheduling. Do not mark staging ready for real testers or production promotion yet. Production untouched.
