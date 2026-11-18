@@ -1,259 +1,261 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Coins, Check, Loader, AlertCircle, Sparkles, Zap, Crown, ShieldCheck } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { initFlutterwavePayment } from '../lib/flutterwave'
+import { useState } from "react";
+import { member, rows } from "../lib/campaigns";
+import { number } from "../lib/economy";
+import { initFlutterwavePayment } from "../lib/flutterwave";
+import {
+  Page,
+  Card,
+  Button,
+  Field,
+  useLoad,
+} from "../components/CampaignUI";
 
-const CREDIT_PACKAGES = [
+const packs = [
   {
-    id: 'starter',
-    label: 'Starter Pack',
+    name: "Starter",
     credits: 500,
-    priceNaira: 1000,
-    icon: Zap,
-    color: 'from-sky-500 to-blue-600',
-    borderColor: 'border-blue-200 hover:border-blue-400',
-    popular: false,
-    plan: 'starter_pack', // <-- must match your backend PLAN_MAP
+    plan: "starter_pack",
   },
   {
-    id: 'growth',
-    label: 'Growth Pack',
+    name: "Growth",
     credits: 1000,
-    priceNaira: 1800,
-    icon: Sparkles,
-    color: 'from-emerald-500 to-teal-600',
-    borderColor: 'border-emerald-200 hover:border-emerald-400',
-    popular: true,
-    plan: 'growth_pack', // <-- must match your backend PLAN_MAP
+    plan: "growth_pack",
   },
   {
-    id: 'pro',
-    label: 'Pro Pack',
+    name: "Pro",
     credits: 2500,
-    priceNaira: 4000,
-    icon: Crown,
-    color: 'from-amber-500 to-orange-600',
-    borderColor: 'border-amber-200 hover:border-amber-400',
-    popular: false,
-    plan: 'pro_pack', // <-- you already use this in PowerShell test
-  }
-]
+    plan: "pro_pack",
+  },
+];
 
 export default function BuyCredits() {
-  const navigate = useNavigate()
-  const [userCredits, setUserCredits] = useState(0)
-  const [userEmail, setUserEmail] = useState('')
-  const [userName, setUserName] = useState('')
-  const [userId, setUserId] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [purchasing, setPurchasing] = useState(null)
-  const [success, setSuccess] = useState(null)
-  const [error, setError] = useState('')
+  const state = useLoad(async () => {
+    const u = await member();
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.user) {
-          setLoading(false)
-          return
-        }
+    return {
+      u,
+      orders: await rows("credit_orders", (q) =>
+        q
+          .eq("user_id", u.id)
+          .order("created_at", {
+            ascending: false,
+          }),
+      ),
+    };
+  });
 
-        setUserId(session.user.id)
-        setUserEmail(session.user.email || '')
+  const [working, setWorking] = useState(false);
+  const [custom, setCustom] = useState(300);
 
-        const { data: profile } = await supabase
-          .from('users')
-          .select('credits, full_name, name, username')
-          .eq('id', session.user.id)
-          .maybeSingle()
-
-        if (profile) {
-          setUserCredits(Number(profile.credits) || 0)
-
-          // pick the first available name field
-          const n =
-            profile.full_name ||
-            profile.name ||
-            profile.username ||
-            'PCGH User'
-          setUserName(n)
-        }
-      } catch (err) {
-        setError('Failed to load profile')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
-
-  const handlePurchase = async (pkg) => {
-    if (!userId || !userEmail) {
-      setError('You must be logged in to purchase credits.')
-      return
+  async function purchase(plan, credits) {
+    if (working) {
+      return;
     }
 
-    setPurchasing(pkg.id)
-    setError('')
-    setSuccess(null)
+    setWorking(true);
+    state.setError("");
 
     try {
-      // 1) ask backend to create hosted payment + return link
       const { link } = await initFlutterwavePayment({
-        plan: pkg.plan,     // IMPORTANT: must match server PLAN_MAP keys
-        user_id: userId,
-        email: userEmail,
-        name: userName || 'PCGH User',
-      })
+        plan,
+        credits,
+      });
 
-      // 2) redirect user to Flutterwave hosted checkout
-      window.location.href = link
-    } catch (err) {
-      setError(err?.message || 'Failed to initialize payment. Please try again.')
-      setPurchasing(null)
+      window.location.assign(link);
+    } catch (e) {
+      state.setError(e.message);
+      setWorking(false);
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <Loader className="w-8 h-8 animate-spin text-gray-400" />
-      </div>
-    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-900">Buy Credits</h1>
-          <p className="text-gray-600 mt-3 text-lg">
-            Power up your growth with more credits
+    <Page
+      title="Fund your next campaign"
+      description="₦1 buys 1 credit. Each campaign costs 500 credits."
+      {...state}
+    >
+      {state.data && (
+        <Card>
+          <p>
+            Available balance:{" "}
+            <strong>
+              {number(state.data.u.credits)} credits
+            </strong>
+            {" "}·{" "}
+            {number(state.data.u.reserved_credits)}
+            {" "}reserved
+          </p>
+        </Card>
+      )}
+
+      {new URLSearchParams(
+        window.location.search,
+      ).get("status") && (
+        <Card>
+          <p role="status">
+            Your payment is being checked. Credits
+            are added only after server verification.
           </p>
 
-          {userId && (
-            <div className="mt-4 inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-5 py-2.5 shadow-sm">
-              <Coins className="w-5 h-5 text-amber-500" />
-              <span className="text-gray-700">Current balance:</span>
-              <span className="font-bold text-gray-900 text-lg">{userCredits}</span>
+          <Button
+            secondary
+            onClick={state.reload}
+          >
+            Refresh Payment Status
+          </Button>
+        </Card>
+      )}
+
+      <div className="grid md:grid-cols-3 gap-6">
+        {packs.map((p, i) => (
+          <Card
+            key={p.plan}
+            className={`flex flex-col ${
+              i === 1
+                ? "border-emerald-600 ring-2 ring-emerald-100"
+                : ""
+            }`}
+          >
+            <div className="h-7">
+              {i === 1 && (
+                <span className="text-emerald-800 bg-emerald-50 rounded-full px-3 py-1 text-xs font-bold">
+                  RECOMMENDED
+                </span>
+              )}
             </div>
-          )}
-        </div>
 
-        {error && (
-          <div className="max-w-md mx-auto mb-8 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
-        )}
+            <h2 className="text-xl font-bold mt-4">
+              {p.name} Pack
+            </h2>
 
-        {success && (
-          <div className="max-w-md mx-auto mb-8 p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                <Check className="w-6 h-6 text-emerald-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-emerald-800">Payment Successful</p>
-                <p className="text-emerald-700 text-sm">
-                  {success.credits} credits added to your account
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/')}
-              className="mt-4 w-full py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium"
-            >
-              Go to Dashboard
-            </button>
-          </div>
-        )}
+            <p className="text-4xl font-bold mt-4">
+              ₦{number(p.credits)}
+            </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {CREDIT_PACKAGES.map((pkg) => {
-            const Icon = pkg.icon
-            return (
-              <div
-                key={pkg.id}
-                className={`relative bg-white rounded-2xl border-2 ${pkg.borderColor} shadow-sm transition-all duration-200 overflow-hidden ${
-                  pkg.popular ? 'ring-2 ring-emerald-500 ring-offset-2' : ''
-                }`}
+            <p className="text-gray-600 my-3">
+              {number(p.credits)} credits
+            </p>
+
+            <ul className="space-y-3 text-sm text-gray-600 mb-6">
+              <li>
+                Submit {p.credits / 500} campaign
+                {p.credits > 500 ? "s" : ""}
+              </li>
+
+              <li>
+                Credits added after payment confirmation
+              </li>
+
+              <li>
+                Purchased credits don’t expire
+              </li>
+            </ul>
+
+            <div className="mt-auto">
+              <Button
+                disabled={working}
+                onClick={() => purchase(p.plan)}
               >
-                {pkg.popular && (
-                  <div className="bg-emerald-500 text-white text-xs font-bold text-center py-1.5 tracking-wide uppercase">
-                    Most Popular
-                  </div>
-                )}
-
-                <div className="p-6">
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${pkg.color} flex items-center justify-center mb-4`}>
-                    <Icon className="w-7 h-7 text-white" />
-                  </div>
-
-                  <h3 className="text-xl font-bold text-gray-900">{pkg.label}</h3>
-
-                  <div className="mt-4 mb-1">
-                    <span className="text-4xl font-bold text-gray-900">
-                      {'\u20A6'}{pkg.priceNaira.toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-gray-500 text-sm mb-6">Nigerian Naira</p>
-
-                  <div className="flex items-center gap-2 mb-6 py-3 px-4 bg-gray-50 rounded-lg">
-                    <Coins className="w-5 h-5 text-amber-500" />
-                    <span className="text-gray-900 font-semibold text-lg">{pkg.credits.toLocaleString()}</span>
-                    <span className="text-gray-600 text-sm">credits</span>
-                  </div>
-
-                  <ul className="space-y-2.5 mb-6 text-sm text-gray-700">
-                    <li className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                      {pkg.credits.toLocaleString()} engagement actions
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                      Instant delivery
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                      No expiry
-                    </li>
-                  </ul>
-
-                  <button
-                    onClick={() => handlePurchase(pkg)}
-                    disabled={purchasing !== null}
-                    className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 ${
-                      pkg.popular
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200'
-                        : 'bg-gray-900 text-white hover:bg-gray-800'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {purchasing === pkg.id ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Loader className="w-4 h-4 animate-spin" />
-                        Redirecting...
-                      </span>
-                    ) : (
-                      `Pay ${'\u20A6'}${pkg.priceNaira.toLocaleString()}`
-                    )}
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="mt-10 flex flex-col items-center gap-2 text-sm text-gray-500">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Secured by Flutterwave</span>
-          </div>
-          <p>Credits are added after payment verification. All purchases are final.</p>
-        </div>
+                {working
+                  ? "Opening checkout…"
+                  : `Pay ₦${number(p.credits)}`}
+              </Button>
+            </div>
+          </Card>
+        ))}
       </div>
-    </div>
-  )
+
+      <Card>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            purchase("custom", Number(custom));
+          }}
+        >
+          <h2 className="font-bold text-xl">
+            Top up exactly what you need
+          </h2>
+
+          <p>
+            Have 200 earned credits? Buy 300 more
+            for your next campaign.
+          </p>
+
+          <Field label="Credits to buy (100–100,000)">
+            <input
+              type="number"
+              min={100}
+              max={100000}
+              step={1}
+              required
+              value={custom}
+              onChange={(e) =>
+                setCustom(e.target.value)
+              }
+            />
+          </Field>
+
+          <Button
+            disabled={
+              working ||
+              !Number.isInteger(Number(custom)) ||
+              Number(custom) < 100 ||
+              Number(custom) > 100000
+            }
+          >
+            Pay ₦{number(custom)}
+          </Button>
+        </form>
+      </Card>
+
+      <Card>
+        <h2 className="font-bold">
+          How campaign credits work
+        </h2>
+
+        <p className="mt-2">
+          500 credits = 300 platform fee + 200
+          engagement reward pool. Campaigns target
+          100 unique verified completions and run
+          for up to seven days after approval.
+        </p>
+
+        <p className="mt-2 text-gray-600">
+          Each approved campaign unlocks up to 200
+          credits of earning allowance. Complete
+          eligible tasks at 2 credits each to earn
+          toward your next campaign. Earned credits
+          are for platform use, not cash withdrawals.
+          Unused campaign reward credits are returned
+          after settlement.
+        </p>
+      </Card>
+
+      {state.data?.orders.length > 0 && (
+        <Card>
+          <h2 className="font-bold">
+            Recent checkout status
+          </h2>
+
+          {state.data.orders
+            .slice(0, 5)
+            .map((o) => (
+              <p
+                className="border-t py-3 mt-2"
+                key={o.reference}
+              >
+                ₦{number(o.amount_naira)}
+                {" "}→{" "}
+                {number(o.credits)} credits
+                {" "}·{" "}
+                {o.status === "completed"
+                  ? "Payment confirmed"
+                  : "Awaiting confirmation"}
+              </p>
+            ))}
+        </Card>
+      )}
+    </Page>
+  );
 }
