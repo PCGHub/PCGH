@@ -411,7 +411,7 @@ export default function AdsManager() {
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             <PlusCircle className="w-5 h-5" />
-            New Campaign
+            New Ad Plan
           </button>
         </div>
 
@@ -602,11 +602,11 @@ export default function AdsManager() {
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div role="dialog" aria-modal="true" aria-label="Ad plan editor" className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
               <h2 className="text-2xl font-bold text-slate-900">
-                {editingCampaign ? 'Edit Campaign' : 'Create New Campaign'}
+                {editingCampaign ? 'Edit Ad Plan' : 'Create New Ad Plan'}
               </h2>
               <button
                 onClick={() => {
@@ -807,7 +807,7 @@ export default function AdsManager() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Campaign Notes
+                  Audience planning notes
                 </label>
                 <textarea
                   value={formData.notes}
