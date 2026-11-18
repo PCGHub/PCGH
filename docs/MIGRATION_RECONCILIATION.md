@@ -96,3 +96,13 @@ Applied staging migration `staging_restrict_legacy_security_definer_rpc`: revoke
 Supabase security lint references: https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable and https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable.
 
 **Next acceptance tasks:** role-impersonated SQL/REST tests, signup with zero credits, admin PIN null/default rejection, pod eligibility bypass, campaign credit conservation and refunds, Flutterwave sandbox webhook idempotency, frontend preview integration. No claim of end-to-end readiness.
+
+## Read-only permission and function-body acceptance — 2026-11-18
+
+Inspected live staging `information_schema.columns`, `pg_policies`, role column privileges and `pg_get_functiondef(public.campaign_action(text,jsonb))`.
+
+- `authenticated` role cannot UPDATE `users.credits`, `reserved_credits`, `earning_allowance`, `is_admin`, `admin_role`, `admin_pin`, or `email`; username UPDATE allowed. `admin_pin` SELECT denied.
+- `users.profile_read` policy is self-or-`campaign_admin()`; `profile_edit` is own-row only. `campaigns.campaign_read` requires active unexpired campaign and explicitly non-null matching `users.pod_id` for group visibility, or recipient/owner/admin/claim access.
+- Installed `campaign_action` requires `auth.uid()`, checks active membership, rejects empty PIN and absent PIN hash, and uses `campaign_admin()` for privileged approve/reject/distribute/review/settle/access/adjust/admin_pin/manage_admin actions. `start` checks group `pod_id IS NOT NULL`, ownership, allowance and claim slot limits. `submit` reserves 500 credits, `approve` charges reserved 500 and unlocks 200 earning allowance, `reject` releases 500, `review` pays 2 per verified claim, `settle` refunds unused reward pool. This is **code inspection only**, not execution proof.
+
+**Remaining acceptance gap:** no actual signed-in staging users, so no role-impersonated end-to-end test of signup, PIN lockout, claim visibility, concurrent claims, payments, or refunds. Do not report those as passing. Confirm intended frontend use of legacy `payments` table before promoting payment lockdown to production.
