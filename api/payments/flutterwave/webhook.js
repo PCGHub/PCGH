@@ -94,10 +94,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json(result);
   } catch (error) {
-    console.error(
-      "Payment settlement failed:",
-      error.message,
-    );
+    console.error("Payment settlement failed (details withheld to protect credentials)");
 
     return res.status(500).json({
       error: "Payment settlement failed; retry required",
