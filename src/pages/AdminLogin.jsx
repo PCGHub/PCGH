@@ -12,6 +12,9 @@ import { action } from "../lib/campaigns";
 
 export default function AdminLogin() {
   const [pin, setPin] = useState("");
+  const [setup, setSetup] = useState(false);
+  const [accountPassword, setAccountPassword] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,9 +37,22 @@ export default function AdminLogin() {
         return;
       }
 
-      await action("admin_login", {
-        pin,
-      });
+      if (setup) {
+        if (pin.length < 8 || pin !== confirmPin) throw new Error("PINs must match and contain at least 8 characters.");
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Please sign in again.");
+        const response = await fetch("/api/admin/initialize-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ password: accountPassword, pin }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.configured) throw new Error(result.error || "PIN setup failed");
+        setAccountPassword("");
+        setConfirmPin("");
+      }
+      const login = await action("admin_login", { pin });
+      if (login?.error) throw new Error(login.error);
 
       navigate("/admin");
     } catch (error) {
@@ -73,7 +89,7 @@ export default function AdminLogin() {
             </h1>
 
             <p className="text-gray-400 text-sm mt-2">
-              Enter your admin PIN to continue
+              {setup ? "Create your first admin PIN" : "Enter your admin PIN to continue"}
             </p>
           </div>
 
@@ -87,9 +103,10 @@ export default function AdminLogin() {
               </div>
             )}
 
+            {setup && <div><label className="block text-sm font-medium text-gray-700 mb-2">Confirm your account password</label><input type="password" autoComplete="current-password" required value={accountPassword} onChange={e => setAccountPassword(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-xl" /></div>}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Admin PIN
+                {setup ? "New Admin PIN (at least 8 characters)" : "Admin PIN"}
               </label>
 
               <div className="relative">
@@ -129,6 +146,7 @@ export default function AdminLogin() {
               </div>
             </div>
 
+            {setup && <div><label className="block text-sm font-medium text-gray-700 mb-2">Confirm new PIN</label><input type="password" required value={confirmPin} onChange={e => setConfirmPin(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-xl" /></div>}
             <button
               type="submit"
               disabled={loading || !pin}
@@ -136,8 +154,9 @@ export default function AdminLogin() {
             >
               {loading
                 ? "Verifying..."
-                : "Access Admin Panel"}
+                : setup ? "Create PIN and Access Admin" : "Access Admin Panel"}
             </button>
+            <button type="button" onClick={() => { setSetup(!setup); setError(""); setPin(""); setConfirmPin(""); setAccountPassword(""); }} className="text-sm text-gray-700 underline w-full">{setup ? "Already have a PIN? Sign in" : "First-time administrator? Create PIN"}</button>
           </form>
         </div>
       </div>
