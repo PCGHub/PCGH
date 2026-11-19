@@ -37,3 +37,19 @@ export async function initFlutterwavePayment({
 
   return json;
 }
+
+export async function confirmFlutterwavePayment({ transaction_id, tx_ref }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Please sign in to confirm payment");
+  const response = await fetch(
+    `${import.meta.env.VITE_API_BASE_URL || ""}/api/payments/flutterwave/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ transaction_id, tx_ref }),
+    },
+  );
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || !json.completed) throw new Error(json.error || "Payment verification pending");
+  return json;
+}
