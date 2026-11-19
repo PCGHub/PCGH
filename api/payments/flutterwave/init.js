@@ -33,9 +33,20 @@ module.exports = async (req, res) => {
       });
     }
 
+    // Staging must never fall back to a shared production service-role key.
+    const isStaging = new URL(SUPABASE_URL).hostname === "hsicgiikaemesqrdltsh.supabase.co";
+    const backendKey = isStaging
+      ? process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY
+      : SUPABASE_SERVICE_ROLE_KEY;
+    if (!backendKey || (isStaging && (!process.env.STAGING_FLW_SECRET_KEY || !process.env.STAGING_APP_URL))) {
+      return res.status(503).json({ error: "Staging checkout is not configured" });
+    }
+    const paymentKey = isStaging ? process.env.STAGING_FLW_SECRET_KEY : FLW_SECRET_KEY;
+    const returnUrl = isStaging ? process.env.STAGING_APP_URL : APP_URL;
+
     const sb = createClient(
       SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY,
+      backendKey,
       {
         auth: {
           persistSession: false,
@@ -107,14 +118,14 @@ module.exports = async (req, res) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${FLW_SECRET_KEY}`,
+          Authorization: `Bearer ${paymentKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           tx_ref,
           amount: credits,
           currency: "NGN",
-          redirect_url: `${APP_URL}/buy-credits?status=processing`,
+          redirect_url: `${returnUrl}/buy-credits?status=processing`,
           customer: {
             email: user.email,
           },
