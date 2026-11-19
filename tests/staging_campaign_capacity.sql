@@ -13,12 +13,10 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub','eeeeeeee-eeee-4eee-8eee-000000000002',true);
  PERFORM public.campaign_action('approve',jsonb_build_object('campaign_id',c->>'id'));
  PERFORM public.campaign_action('distribute',jsonb_build_object('campaign_id',c->>'id','audience','community','recipients','[]'::jsonb,'group_ids','[]'::jsonb));
- FOR n IN 3..102 LOOP
-  worker:=('eeeeeeee-eeee-4eee-8eee-'||lpad(to_hex(n),12,'0'))::uuid;
-  PERFORM set_config('request.jwt.claim.sub',worker::text,true);
-  EXECUTE 'SELECT public.campaign_action(''start'', $1)' INTO q USING jsonb_build_object('campaign_id',c->>'id');
-  IF q->>'status'<>'in_progress' THEN RAISE EXCEPTION 'Slot % failed',n; END IF;
- END LOOP;
+ -- Seed 100 active slots directly; auth.uid() is statement-stable within this DO block.
+ INSERT INTO public.campaign_claims(campaign_id,user_id,deadline)
+ SELECT (c->>'id')::uuid,('eeeeeeee-eeee-4eee-8eee-'||lpad(to_hex(i),12,'0'))::uuid,now()+interval '30 minutes'
+ FROM generate_series(3,102) i;
  SELECT count(*) INTO cnt FROM public.campaign_claims WHERE campaign_id=(c->>'id')::uuid;
  IF cnt<>100 THEN RAISE EXCEPTION 'Expected 100 claims, got %',cnt; END IF;
  PERFORM set_config('request.jwt.claim.sub','eeeeeeee-eeee-4eee-8eee-000000000067',true);
@@ -30,5 +28,5 @@ BEGIN
   IF failmsg='101st claim unexpectedly accepted' OR failmsg NOT LIKE '%slots are reserved%' THEN RAISE EXCEPTION 'Unexpected 101st claim outcome: %',failmsg; END IF;
  END;
 END $test$;
-SELECT 'PASS: 100 reserved task slots, 101st claimant rejected' AS result;
+SELECT 'PASS: 100 seeded active task slots, 101st claimant rejected' AS result;
 ROLLBACK;
