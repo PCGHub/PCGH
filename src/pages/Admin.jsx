@@ -1,3 +1,4 @@
+import { ShieldCheck, RefreshCw, LogOut, Megaphone, ClipboardCheck, Users, Send, Wallet, Settings, LayoutDashboard, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -166,48 +167,54 @@ export default function Admin() {
       description="Review campaigns, verify evidence, and account for every credit."
       {...state}
     >
-      <div className="flex gap-3">
-        <Button
-          secondary
-          onClick={() => navigate("/admin-login")}
-        >
-          Admin Access
-        </Button>
-
-        <Button
-          secondary
-          onClick={async () => {
-            await action("admin_logout");
-            navigate("/");
-          }}
-        >
-          Exit Admin
-        </Button>
-
-        <Button
-          secondary
-          disabled={state.busy}
-          onClick={state.reload}
-        >
-          Refresh
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700"><ShieldCheck size={21} /></span>
+          <div><p className="text-sm font-semibold text-gray-900">Management Console</p><p className="text-xs text-gray-500">Secure administrator workspace</p></div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={state.reload} disabled={state.busy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"><RefreshCw size={16} /> Refresh</button>
+          <button type="button" onClick={async () => { await action("admin_logout"); navigate("/"); }} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><LogOut size={16} /> Exit</button>
+        </div>
       </div>
 
       {d && (
         <>
-          <Filter
-            value={tab}
-            onChange={switchTab}
-            options={[
-              "overview",
-              "campaigns",
-              "task_monitor",
-              "distribution",
-              "users",
-              "credits_audit",
-              "settings",
-            ]}
-          />
+          <nav aria-label="Admin sections" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+            {[
+              ["overview", "Overview", LayoutDashboard],
+              ["campaigns", "Campaigns", Megaphone],
+              ["task_monitor", "Task Monitor", ClipboardCheck],
+              ["distribution", "Distribution", Send],
+              ["users", "Users", Users],
+              ["credits_audit", "Credit Audit", Wallet],
+              ["settings", "Settings", Settings],
+            ].map(([key, title, Icon]) => (
+              <button key={key} type="button" aria-current={tab === key ? "page" : undefined} onClick={() => switchTab(key)}
+                className={`flex min-w-0 items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-colors ${tab === key ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50"}`}>
+                <Icon size={17} className="shrink-0" /><span className="truncate">{title}</span>
+              </button>
+            ))}
+          </nav>
+
+          {tab === "overview" && (
+            <section className="overflow-hidden rounded-2xl bg-gray-900 p-5 text-white shadow-sm sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div><p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">Platform overview</p><h2 className="mt-2 text-2xl font-bold sm:text-3xl">Welcome, Admin</h2><p className="mt-2 text-sm text-gray-300">Your campaign operations at a glance.</p></div>
+                <span className="rounded-xl bg-white/10 p-3 text-emerald-300"><ShieldCheck size={26} /></span>
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  ["Pending approvals", d.campaigns.filter(c => c.status === "pending_approval").length],
+                  ["Active campaigns", d.campaigns.filter(c => c.status === "active").length],
+                  ["Task reviews", d.claims.filter(c => c.status === "pending_verification").length],
+                  ["Members", d.users.length],
+                ].map(([name, value]) => (
+                  <div key={name} className="rounded-xl border border-white/10 bg-white/10 p-3 sm:p-4"><p className="text-xs text-gray-300">{name}</p><p className="mt-2 text-2xl font-bold">{number(value)}</p></div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {tab === "overview" && (
             <>
