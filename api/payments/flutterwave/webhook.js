@@ -9,9 +9,19 @@ module.exports = async (req, res) => {
   }
 
   try {
+    const isStaging = new URL(process.env.SUPABASE_URL).hostname === "hsicgiikaemesqrdltsh.supabase.co";
+    const backendKey = isStaging
+      ? process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY
+      : process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const paymentKey = isStaging
+      ? process.env.STAGING_FLW_SECRET_KEY
+      : process.env.FLW_SECRET_KEY;
+    if (!backendKey || !paymentKey || (isStaging && !process.env.STAGING_FLW_WEBHOOK_SECRET_HASH)) {
+      return res.status(503).json({ error: "Staging webhook is not configured" });
+    }
     const secret =
-      process.env.FLW_WEBHOOK_SECRET_HASH ||
-      process.env.FLW_SECRET_HASH;
+      (isStaging ? process.env.STAGING_FLW_WEBHOOK_SECRET_HASH : null) ||
+      (!isStaging && (process.env.FLW_WEBHOOK_SECRET_HASH || process.env.FLW_SECRET_HASH));
 
     const signature = req.headers["verif-hash"];
 
@@ -41,7 +51,7 @@ module.exports = async (req, res) => {
       `https://api.flutterwave.com/v3/transactions/${id}/verify`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+          Authorization: `Bearer ${paymentKey}`,
         },
       },
     );
@@ -60,7 +70,7 @@ module.exports = async (req, res) => {
 
     const sb = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      backendKey,
       {
         auth: {
           persistSession: false,
