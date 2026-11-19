@@ -16,7 +16,7 @@ BEGIN
  FOR n IN 3..102 LOOP
   worker:=('eeeeeeee-eeee-4eee-8eee-'||lpad(to_hex(n),12,'0'))::uuid;
   PERFORM set_config('request.jwt.claim.sub',worker::text,true);
-  q:=public.campaign_action('start',jsonb_build_object('campaign_id',c->>'id'));
+  EXECUTE 'SELECT public.campaign_action(''start'', $1)' INTO q USING jsonb_build_object('campaign_id',c->>'id');
   IF q->>'status'<>'in_progress' THEN RAISE EXCEPTION 'Slot % failed',n; END IF;
  END LOOP;
  SELECT count(*) INTO cnt FROM public.campaign_claims WHERE campaign_id=(c->>'id')::uuid;
