@@ -197,6 +197,37 @@ export default function Admin() {
             ))}
           </nav>
 
+          {tab !== "overview" && (
+            <section className="overflow-hidden rounded-2xl bg-gray-900 p-5 text-white shadow-sm sm:p-7">
+              {(() => {
+                const config = {
+                  campaigns: { title: "Campaign Management", subtitle: "Review requests, approve campaigns, and track their progress.", icon: Megaphone, metrics: [["Total campaigns", d.campaigns.length], ["Pending approval", d.campaigns.filter(c => c.status === "pending_approval").length], ["Active", d.campaigns.filter(c => c.status === "active").length]] },
+                  task_monitor: { title: "Task Monitor", subtitle: "Review evidence and manage participant verification.", icon: ClipboardCheck, metrics: [["Total claims", d.claims.length], ["Awaiting review", d.claims.filter(c => c.status === "pending_verification").length], ["Verified", d.claims.filter(c => c.status === "verified").length]] },
+                  distribution: { title: "Task Distribution", subtitle: "Assign approved, funded campaigns to eligible audiences.", icon: Send, metrics: [["Active campaigns", d.campaigns.filter(c => c.status === "active").length], ["Members", d.users.length], ["Pending approvals", d.campaigns.filter(c => c.status === "pending_approval").length]] },
+                  users: { title: "Member Management", subtitle: "Manage members and monitor wallet and participation activity.", icon: Users, metrics: [["Total members", d.users.length], ["Active members", d.users.filter(u => u.is_active).length], ["Administrators", d.users.filter(u => u.is_admin).length]] },
+                  credits_audit: { title: "Credits & Audit", subtitle: "Trace wallet movements, payments, and administrative activity.", icon: Wallet, metrics: [["Wallet events", d.events.length], ["Completed payments", d.orders.filter(o => o.status === "completed").length], ["Audit entries", d.audit.length]] },
+                  settings: { title: "Admin Settings", subtitle: "Manage administrator security and authorized account controls.", icon: Settings, metrics: [["Administrators", d.users.filter(u => u.is_admin).length], ["Active members", d.users.filter(u => u.is_active).length], ["Audit entries", d.audit.length]] },
+                };
+                const section = config[tab];
+                if (!section) return null;
+                const Icon = section.icon;
+                return (
+                  <>
+                    <div className="flex items-start justify-between gap-4">
+                      <div><p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">PCGH Crowd · Admin Console</p><h2 className="mt-2 text-2xl font-bold sm:text-3xl">{section.title}</h2><p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-300">{section.subtitle}</p></div>
+                      <span className="shrink-0 rounded-xl bg-white/10 p-3 text-emerald-300"><Icon size={25} /></span>
+                    </div>
+                    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {section.metrics.map(([name, value]) => (
+                        <div key={name} className="rounded-xl border border-white/10 bg-white/10 p-3 sm:p-4"><p className="text-xs text-gray-300">{name}</p><p className="mt-2 text-2xl font-bold">{number(value)}</p></div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </section>
+          )}
+
           {tab === "overview" && (
             <section className="overflow-hidden rounded-2xl bg-gray-900 p-5 text-white shadow-sm sm:p-7">
               <div className="flex items-start justify-between gap-4">
