@@ -35,7 +35,7 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub',admin::text,true);
  PERFORM public.campaign_action('review',jsonb_build_object('claim_id',claim->>'id','approved',true));
  SELECT credits,earning_reserved,earning_allowance,total_earned_credits INTO v,reserved,allowance,earned FROM public.users WHERE id=worker;
- SELECT distributed,verified_count INTO distributed,verified FROM public.campaigns WHERE id=(campaign->>'id')::uuid;
+ SELECT c.distributed,c.verified_count INTO distributed,verified FROM public.campaigns c WHERE c.id=(campaign->>'id')::uuid;
  IF v<>2 OR reserved<>0 OR allowance<>198 OR earned<>2 OR distributed<>2 OR verified<>1 THEN RAISE EXCEPTION 'Verified reward accounting incorrect'; END IF;
  BEGIN
   PERFORM public.campaign_action('review',jsonb_build_object('claim_id',claim->>'id','approved',true));
