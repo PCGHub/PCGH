@@ -5,7 +5,7 @@ INSERT INTO public.users(id,email,username,credits,earning_allowance,is_admin,ad
 SELECT ('eeeeeeee-eeee-4eee-8eee-'||lpad(to_hex(n),12,'0'))::uuid,'cap'||n||'@example.invalid','cap_'||n,CASE WHEN n=1 THEN 500 ELSE 0 END,CASE WHEN n BETWEEN 3 AND 103 THEN 200 ELSE 0 END,n=2,CASE WHEN n=2 THEN 'owner' END FROM generate_series(1,103) n;
 INSERT INTO public.admin_sessions(user_id,expires_at) VALUES ('eeeeeeee-eeee-4eee-8eee-000000000002',now()+interval '30 minutes');
 SET LOCAL ROLE authenticated;
-DO $test$
+DO $setup$
 DECLARE c jsonb; q jsonb; n int; cnt int; failmsg text; worker uuid;
 BEGIN
  PERFORM set_config('request.jwt.claim.sub','eeeeeeee-eeee-4eee-8eee-000000000001',true);
@@ -13,10 +13,17 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub','eeeeeeee-eeee-4eee-8eee-000000000002',true);
  PERFORM public.campaign_action('approve',jsonb_build_object('campaign_id',c->>'id'));
  PERFORM public.campaign_action('distribute',jsonb_build_object('campaign_id',c->>'id','audience','community','recipients','[]'::jsonb,'group_ids','[]'::jsonb));
- -- Seed 100 active slots directly; auth.uid() is statement-stable within this DO block.
- INSERT INTO public.campaign_claims(campaign_id,user_id,deadline)
- SELECT (c->>'id')::uuid,('eeeeeeee-eeee-4eee-8eee-'||lpad(to_hex(i),12,'0'))::uuid,now()+interval '30 minutes'
- FROM generate_series(3,102) i;
+END $setup$;
+RESET ROLE;
+INSERT INTO public.campaign_claims(campaign_id,user_id,deadline)
+SELECT c.id,('eeeeeeee-eeee-4eee-8eee-'||lpad(to_hex(i),12,'0'))::uuid,now()+interval '30 minutes'
+FROM public.campaigns c CROSS JOIN generate_series(3,102) i
+WHERE c.request_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
+SET LOCAL ROLE authenticated;
+DO $test$
+DECLARE c jsonb; cnt int; failmsg text;
+BEGIN
+ SELECT to_jsonb(x) INTO c FROM public.campaigns x WHERE x.request_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
  SELECT count(*) INTO cnt FROM public.campaign_claims WHERE campaign_id=(c->>'id')::uuid;
  IF cnt<>100 THEN RAISE EXCEPTION 'Expected 100 claims, got %',cnt; END IF;
  PERFORM set_config('request.jwt.claim.sub','eeeeeeee-eeee-4eee-8eee-000000000067',true);
