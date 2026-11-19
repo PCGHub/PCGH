@@ -17,13 +17,25 @@ import {
   Card,
   Button,
   Field,
-  Filter,
   Stats,
   CampaignCard,
   Pagination,
   useLoad,
 } from "../components/CampaignUI";
 import { supabase } from "../lib/supabase";
+
+function AdminFilter({ value, onChange, options }) {
+  return (
+    <div className="flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm" role="group" aria-label="Status filter">
+      {options.map(option => (
+        <button key={option} type="button" aria-pressed={value === option} onClick={() => onChange(option)}
+          className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize transition-colors sm:text-sm ${value === option ? "bg-emerald-700 text-white" : "bg-gray-50 text-gray-600 hover:bg-emerald-50 hover:text-emerald-800"}`}>
+          {label(option)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function Admin() {
   const [tab, setTab] = useState("overview");
@@ -420,7 +432,7 @@ export default function Admin() {
 
           {tab === "campaigns" && (
             <>
-              <Filter
+              <AdminFilter
                 value={filter}
                 onChange={(value) => {
                   setFilter(value);
@@ -536,7 +548,7 @@ export default function Admin() {
 
           {tab === "task_monitor" && (
             <>
-              <Filter
+              <AdminFilter
                 value={filter}
                 onChange={(value) => {
                   setFilter(value);
