@@ -148,10 +148,7 @@ module.exports = async (req, res) => {
       tx_ref,
     });
   } catch (error) {
-    console.error(
-      "Checkout initialization failed:",
-      error.message,
-    );
+    console.error("Checkout initialization failed (details withheld to protect credentials)");
 
     return res.status(502).json({
       error: "Unable to initialize checkout. Please try again.",
