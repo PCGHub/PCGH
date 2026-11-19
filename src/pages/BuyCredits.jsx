@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { member, rows } from "../lib/campaigns";
 import { number } from "../lib/economy";
-import { initFlutterwavePayment } from "../lib/flutterwave";
+import { initFlutterwavePayment, confirmFlutterwavePayment } from "../lib/flutterwave";
 import {
   Page,
   Card,
@@ -46,6 +46,25 @@ export default function BuyCredits() {
 
   const [working, setWorking] = useState(false);
   const [custom, setCustom] = useState(300);
+  const [confirmation, setConfirmation] = useState("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const transaction_id = params.get("transaction_id");
+    const tx_ref = params.get("tx_ref");
+    if (!transaction_id || !tx_ref || params.get("status") !== "successful") return;
+    let cancelled = false;
+    setConfirmation("Verifying your payment securely…");
+    confirmFlutterwavePayment({ transaction_id, tx_ref })
+      .then(() => {
+        if (cancelled) return;
+        setConfirmation("Payment confirmed. Credits have been added.");
+        state.reload();
+      })
+      .catch(() => {
+        if (!cancelled) setConfirmation("Payment confirmation is pending. Do not pay again; contact support with your transaction reference.");
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   async function purchase(plan, credits) {
     if (working) {
