@@ -51,7 +51,9 @@ export default function BuyCredits() {
     const params = new URLSearchParams(window.location.search);
     const transaction_id = params.get("transaction_id");
     const tx_ref = params.get("tx_ref");
-    if (!transaction_id || !tx_ref || params.get("status") !== "successful") return;
+    // Flutterwave may append its own status to a redirect URL that already has status=processing.
+    // Confirm whenever both identifiers are present; the server verifies provider status.
+    if (!transaction_id || !tx_ref) return;
     let cancelled = false;
     setConfirmation("Verifying your payment securely…");
     confirmFlutterwavePayment({ transaction_id, tx_ref })
@@ -65,6 +67,24 @@ export default function BuyCredits() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  async function retryConfirmation() {
+    const params = new URLSearchParams(window.location.search);
+    const transaction_id = params.get("transaction_id");
+    const tx_ref = params.get("tx_ref");
+    if (!transaction_id || !tx_ref) {
+      setConfirmation("No payment reference was returned. Please contact support with your transaction reference.");
+      return;
+    }
+    setConfirmation("Verifying your payment securely…");
+    try {
+      await confirmFlutterwavePayment({ transaction_id, tx_ref });
+      setConfirmation("Payment confirmed. Credits have been added.");
+      await state.reload();
+    } catch (error) {
+      setConfirmation(error.message || "Payment confirmation is pending. Do not pay again.");
+    }
+  }
 
   async function purchase(plan, credits) {
     if (working) {
@@ -107,6 +127,12 @@ export default function BuyCredits() {
         </Card>
       )}
 
+      {confirmation && (
+        <Card>
+          <p role="status">{confirmation}</p>
+        </Card>
+      )}
+
       {new URLSearchParams(
         window.location.search,
       ).get("status") && (
@@ -118,9 +144,12 @@ export default function BuyCredits() {
 
           <Button
             secondary
-            onClick={state.reload}
+            onClick={retryConfirmation}
           >
-            Refresh Payment Status
+            Verify Payment Again
+          </Button>
+          <Button secondary onClick={state.reload}>
+            Refresh Balance
           </Button>
         </Card>
       )}
