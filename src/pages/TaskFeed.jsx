@@ -220,13 +220,8 @@ export default function TaskFeed() {
               <div className="flex gap-3 flex-wrap mt-4">
                 {!q && (
                   <Button
-                    disabled={
-                      working ||
-                      remaining(u) < 2 || !safeUrl(c.url)
-                    }
-                    onClick={() =>
-                      setSelected(c.id)
-                    }
+                    disabled={working}
+                    onClick={() => setSelected(selected === c.id ? null : c.id)}
                   >
                     View Task
                   </Button>
