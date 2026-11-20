@@ -1,6 +1,6 @@
 import { ShieldCheck, RefreshCw, LogOut, Megaphone, ClipboardCheck, Users, Send, Wallet, Settings, LayoutDashboard, AlertTriangle, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   action,
   member,
@@ -38,7 +38,8 @@ function AdminFilter({ value, onChange, options }) {
 }
 
 export default function Admin() {
-  const [tab, setTab] = useState("overview");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(() => params.get("section") === "task_reports" ? "task_reports" : "overview");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
