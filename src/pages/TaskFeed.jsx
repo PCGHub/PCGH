@@ -31,6 +31,7 @@ export default function TaskFeed() {
   const [evidence, setEvidence] = useState("");
   const [report, setReport] = useState(null);
   const [reason, setReason] = useState("");
+  const [reportNotice, setReportNotice] = useState("");
 
   const state = useLoad(async () => {
     const user = await member();
@@ -97,6 +98,7 @@ export default function TaskFeed() {
 
     try {
       await action(name, payload);
+      if (name === "report") setReportNotice("Report sent successfully. The admin team can review it in Task Reports.");
       await state.reload();
 
       setSelected(null);
@@ -104,6 +106,7 @@ export default function TaskFeed() {
       setReport(null);
       setReason("");
     } catch (e) {
+      if (name === "report") setReportNotice("");
       state.setError(e.message);
     } finally {
       setWorking(false);
@@ -119,6 +122,7 @@ export default function TaskFeed() {
       {u && (
         <Allowance user={u} />
       )}
+      {reportNotice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900">{reportNotice}</div>}
 
       <Filter
         value={filter}
@@ -212,12 +216,13 @@ export default function TaskFeed() {
                 </p>
               )}
 
+              {!safeUrl(c.url) && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="alert">This task has no valid destination URL. Please report it to the administrator before starting.</p>}
               <div className="flex gap-3 flex-wrap mt-4">
                 {!q && (
                   <Button
                     disabled={
                       working ||
-                      remaining(u) < 2
+                      remaining(u) < 2 || !safeUrl(c.url)
                     }
                     onClick={() =>
                       setSelected(c.id)
@@ -231,7 +236,7 @@ export default function TaskFeed() {
                   <>
                     <a
                       className="text-emerald-800 underline py-2"
-                      href={safeUrl(c.url) || "#"}
+                      href={safeUrl(c.url) || undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
