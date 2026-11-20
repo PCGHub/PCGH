@@ -53,6 +53,8 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] =
     useState(false);
   const [reportCount, setReportCount] = useState(0);
+  const [memberReplies, setMemberReplies] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,6 +66,9 @@ export default function Navbar() {
       } = await supabase.auth.getUser();
 
       if (!user) {
+        setIsAdmin(false);
+        setMemberReplies([]);
+        setReportCount(0);
         return;
       }
 
@@ -76,13 +81,17 @@ export default function Navbar() {
       const admin = data?.is_admin === true;
       setIsAdmin(admin);
       if (admin) {
-        const { count, error } = await supabase.from("campaign_reports").select("id", { count: "exact", head: true });
+        const { count, error } = await supabase.from("campaign_reports").select("id", { count: "exact", head: true }).neq("status", "resolved");
         if (!error) setReportCount(count || 0);
       }
+      const { data: replies, error: replyError } = await supabase.from("campaign_reports")
+        .select("id,reason,admin_feedback,feedback_at,member_seen_at,status,campaign_id")
+        .eq("user_id", user.id).not("feedback_at", "is", null).order("feedback_at", { ascending: false }).limit(30);
+      if (!replyError) setMemberReplies(replies || []);
     };
 
     checkAdmin();
-  }, []);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -183,6 +192,26 @@ export default function Navbar() {
               {reportCount > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-xs font-bold text-white">{reportCount > 99 ? "99+" : reportCount}</span>}
             </Link>
           )}
+          <div className="relative flex items-center">
+            <button type="button" onClick={() => setNotificationsOpen(open => !open)}
+              aria-label={`Member notifications: ${memberReplies.filter(r => !r.member_seen_at).length} unread`}
+              className="relative rounded-xl border border-gray-200 bg-white p-2.5 text-gray-800 hover:bg-emerald-50">
+              <Bell size={21} />
+              {memberReplies.some(r => !r.member_seen_at) && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-xs font-bold text-white">{memberReplies.filter(r => !r.member_seen_at).length}</span>}
+            </button>
+            {notificationsOpen && <div className="absolute right-0 top-full z-[70] mt-2 max-h-96 w-[min(88vw,24rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-xl">
+              <div className="mb-2 flex items-center justify-between"><strong>Admin feedback</strong><button type="button" onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={18}/></button></div>
+              {memberReplies.length === 0 ? <p className="text-sm text-gray-500">No admin feedback yet.</p> : memberReplies.map(reply => <div key={reply.id} className="mb-2 rounded-xl border border-gray-100 p-3 text-sm">
+                <div className="flex justify-between gap-2"><strong>{reply.status === "resolved" ? "Report resolved" : "Report update"}</strong>{!reply.member_seen_at && <span className="text-emerald-700">New</span>}</div>
+                <p className="mt-1 text-gray-700">{reply.admin_feedback}</p>
+                <p className="mt-1 text-xs text-gray-500">Regarding: {reply.reason}</p>
+                {!reply.member_seen_at && <button type="button" className="mt-2 font-semibold text-emerald-700" onClick={async () => {
+                  const { error } = await supabase.rpc("mark_campaign_report_seen", { p_report_id: reply.id });
+                  if (!error) setMemberReplies(old => old.map(r => r.id === reply.id ? {...r, member_seen_at: new Date().toISOString()} : r));
+                }}>Mark as read</button>}
+              </div>)}
+            </div>}
+          </div>
           <div className="hidden md:flex items-center gap-2">
             <Link
               to="/profile"
