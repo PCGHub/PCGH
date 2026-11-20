@@ -1,4 +1,4 @@
-import { ShieldCheck, RefreshCw, LogOut, Megaphone, ClipboardCheck, Users, Send, Wallet, Settings, LayoutDashboard, ChevronRight } from "lucide-react";
+import { ShieldCheck, RefreshCw, LogOut, Megaphone, ClipboardCheck, Users, Send, Wallet, Settings, LayoutDashboard, AlertTriangle, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -192,7 +192,7 @@ export default function Admin() {
 
       {d && (
         <>
-          <nav aria-label="Admin sections" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+          <nav aria-label="Admin sections" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
             {[
               ["overview", "Overview", LayoutDashboard],
               ["campaigns", "Campaigns", Megaphone],
@@ -201,6 +201,7 @@ export default function Admin() {
               ["users", "Users", Users],
               ["credits_audit", "Credit Audit", Wallet],
               ["settings", "Settings", Settings],
+              ["task_reports", `Task Reports (${d.reports.length})`, AlertTriangle],
             ].map(([key, title, Icon]) => (
               <button key={key} type="button" aria-current={tab === key ? "page" : undefined} onClick={() => switchTab(key)}
                 className={`flex min-w-0 items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-colors ${tab === key ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50"}`}>
@@ -218,6 +219,7 @@ export default function Admin() {
                   distribution: { title: "Task Distribution", subtitle: "Assign approved, funded campaigns to eligible audiences.", icon: Send, metrics: [["Active campaigns", d.campaigns.filter(c => c.status === "active").length], ["Members", d.users.length], ["Pending approvals", d.campaigns.filter(c => c.status === "pending_approval").length]] },
                   users: { title: "Member Management", subtitle: "Manage members and monitor wallet and participation activity.", icon: Users, metrics: [["Total members", d.users.length], ["Active members", d.users.filter(u => u.is_active).length], ["Administrators", d.users.filter(u => u.is_admin).length]] },
                   credits_audit: { title: "Credits & Audit", subtitle: "Trace wallet movements, payments, and administrative activity.", icon: Wallet, metrics: [["Wallet events", d.events.length], ["Completed payments", d.orders.filter(o => o.status === "completed").length], ["Audit entries", d.audit.length]] },
+                  task_reports: { title: "Task Reports", subtitle: "Review broken links and issues reported by community members.", icon: AlertTriangle, metrics: [["Reports received", d.reports.length], ["Affected campaigns", new Set(d.reports.map(r => r.campaign_id)).size], ["Members reporting", new Set(d.reports.map(r => r.user_id)).size]] },
                   settings: { title: "Admin Settings", subtitle: "Manage administrator security and authorized account controls.", icon: Settings, metrics: [["Administrators", d.users.filter(u => u.is_admin).length], ["Active members", d.users.filter(u => u.is_active).length], ["Audit entries", d.audit.length]] },
                 };
                 const section = config[tab];
@@ -237,6 +239,30 @@ export default function Admin() {
                   </>
                 );
               })()}
+            </section>
+          )}
+
+          {d.reports.length > 0 && tab !== "task_reports" && (
+            <button type="button" onClick={() => switchTab("task_reports")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm font-semibold text-amber-900">
+              <span className="flex items-center gap-2"><AlertTriangle size={18} /> {d.reports.length} task report{d.reports.length === 1 ? "" : "s"} received — review broken links and member issues</span>
+              <ChevronRight size={18} />
+            </button>
+          )}
+
+          {tab === "task_reports" && (
+            <section className="space-y-3" aria-label="Submitted task reports">
+              {d.reports.length === 0 ? <Card>No task reports have been submitted.</Card> :
+                [...d.reports].sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).map(report => {
+                  const campaign = d.campaigns.find(c => c.id === report.campaign_id);
+                  return <Card key={report.id}>
+                    <div className="flex items-start justify-between gap-3"><h3 className="font-bold text-gray-900">{campaign?.title || "Campaign unavailable"}</h3><span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Reported</span></div>
+                    <p className="mt-2 text-sm text-gray-600">From {username(report.user_id)} · {date(report.created_at)}</p>
+                    <p className="mt-3 whitespace-pre-wrap text-gray-800">{report.reason}</p>
+                    <p className="mt-2 break-all text-xs text-gray-500">Campaign reference: {report.campaign_id}</p>
+                    {campaign?.url && <a href={campaign.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm font-semibold text-emerald-800 underline">Inspect destination link ↗</a>}
+                  </Card>;
+                })
+              }
             </section>
           )}
 
