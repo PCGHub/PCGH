@@ -19,6 +19,7 @@ import {
   Coins,
   Shield,
   Target,
+  Bell,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -51,6 +52,7 @@ export default function Navbar() {
 
   const [isAdmin, setIsAdmin] =
     useState(false);
+  const [reportCount, setReportCount] = useState(0);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,7 +73,12 @@ export default function Navbar() {
         .eq("id", user.id)
         .maybeSingle();
 
-      setIsAdmin(data?.is_admin === true);
+      const admin = data?.is_admin === true;
+      setIsAdmin(admin);
+      if (admin) {
+        const { count, error } = await supabase.from("campaign_reports").select("id", { count: "exact", head: true });
+        if (!error) setReportCount(count || 0);
+      }
     };
 
     checkAdmin();
@@ -169,6 +176,13 @@ export default function Navbar() {
             </div>
           </div>
 
+          {isAdmin && (
+            <Link to="/admin?section=task_reports" aria-label={`Task report notifications: ${reportCount}`} title="Task reports"
+              className="relative inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2.5 text-gray-800 hover:bg-emerald-50">
+              <Bell size={21} />
+              {reportCount > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-xs font-bold text-white">{reportCount > 99 ? "99+" : reportCount}</span>}
+            </Link>
+          )}
           <div className="hidden md:flex items-center gap-2">
             <Link
               to="/profile"
