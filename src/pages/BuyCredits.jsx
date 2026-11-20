@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 import { member, rows } from "../lib/campaigns";
 import { number } from "../lib/economy";
 import { initFlutterwavePayment, confirmFlutterwavePayment } from "../lib/flutterwave";
@@ -30,6 +32,8 @@ const packs = [
 
 export default function BuyCredits() {
   const state = useLoad(async () => {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) throw new Error("Your sign-in session is missing or expired. Sign in again to purchase credits.");
     const u = await member();
 
     return {
@@ -113,6 +117,13 @@ export default function BuyCredits() {
       description="₦1 buys 1 credit. Each campaign costs 500 credits."
       {...state}
     >
+      {state.error && /sign.in|session|auth|jwt|token/i.test(state.error) && (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="font-semibold text-amber-900">Your account session needs to be refreshed before checkout.</p>
+          <p className="mt-2 text-sm text-amber-800">Do not pay again until your account balance loads correctly.</p>
+          <div className="mt-4 flex flex-wrap gap-3"><Button secondary onClick={state.reload}>Retry session</Button><Link to="/login" className="rounded-xl bg-emerald-700 px-4 py-2.5 font-medium text-white">Sign in again</Link></div>
+        </Card>
+      )}
       {state.data && (
         <Card>
           <p>
@@ -201,7 +212,7 @@ export default function BuyCredits() {
 
             <div className="mt-auto">
               <Button
-                disabled={working}
+                disabled={working || !state.data || !!state.error}
                 onClick={() => purchase(p.plan)}
               >
                 {working
@@ -247,6 +258,7 @@ export default function BuyCredits() {
           <Button
             disabled={
               working ||
+              !state.data || !!state.error ||
               !Number.isInteger(Number(custom)) ||
               Number(custom) < 100 ||
               Number(custom) > 100000
