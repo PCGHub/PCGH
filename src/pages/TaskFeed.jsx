@@ -277,10 +277,12 @@ export default function TaskFeed() {
                         not prove completion.
                       </p>
 
+                      {safeUrl(c.url) && <a href={safeUrl(c.url)} target="_blank" rel="noopener noreferrer" className="inline-flex rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800">Open task link ↗</a>}
+                      {remaining(u) < 2 && <p className="text-sm text-amber-800">You can inspect this link, but cannot start earning until your allowance is available.</p>}
                       <Button
                         disabled={
                           working ||
-                          remaining(u) < 2
+                          remaining(u) < 2 || !safeUrl(c.url)
                         }
                         onClick={() =>
                           run("start", {
