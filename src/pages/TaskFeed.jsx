@@ -217,6 +217,16 @@ export default function TaskFeed() {
               )}
 
               {!safeUrl(c.url) && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="alert">This task has no valid destination URL. Please report it to the administrator before starting.</p>}
+              {!q && remaining(u) < 2 && (
+                <p role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950">
+                  Viewing only — no reward available. Your earning allowance is {remaining(u)} credits. You cannot start or submit this task for 2 credits. Purchased wallet credits do not increase earning allowance. Please do not complete the external task expecting a reward.
+                </p>
+              )}
+              {!q && remaining(u) >= 2 && (
+                <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                  To earn 2 credits: select Task Details / Start, press Start Task, then complete the external assignment and submit evidence within the deadline. Opening the link alone does not start a claim.
+                </p>
+              )}
               <div className="flex gap-3 flex-wrap mt-4">
                 {safeUrl(c.url) ? (
                   <a
@@ -225,7 +235,7 @@ export default function TaskFeed() {
                     rel="noopener noreferrer"
                     className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                   >
-                    Open Task Link ↗
+                    {remaining(u) < 2 && !q ? "Preview Link (No Reward) ↗" : "Open Task Link ↗"}
                   </a>
                 ) : (
                   <span className="inline-flex items-center rounded-xl bg-gray-200 px-4 py-2.5 text-gray-600">
