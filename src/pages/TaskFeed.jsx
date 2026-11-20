@@ -223,9 +223,9 @@ export default function TaskFeed() {
                     href={safeUrl(c.url)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 font-medium text-white hover:bg-emerald-800"
+                    className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white shadow-sm hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
                   >
-                    View Task ↗
+                    Open Task Link ↗
                   </a>
                 ) : (
                   <span className="inline-flex items-center rounded-xl bg-gray-200 px-4 py-2.5 text-gray-600">
