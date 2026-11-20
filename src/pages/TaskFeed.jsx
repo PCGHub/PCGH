@@ -218,12 +218,27 @@ export default function TaskFeed() {
 
               {!safeUrl(c.url) && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="alert">This task has no valid destination URL. Please report it to the administrator before starting.</p>}
               <div className="flex gap-3 flex-wrap mt-4">
+                {safeUrl(c.url) ? (
+                  <a
+                    href={safeUrl(c.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 font-medium text-white hover:bg-emerald-800"
+                  >
+                    View Task ↗
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center rounded-xl bg-gray-200 px-4 py-2.5 text-gray-600">
+                    Link unavailable — report this task
+                  </span>
+                )}
                 {!q && (
                   <Button
+                    secondary
                     disabled={working}
                     onClick={() => setSelected(selected === c.id ? null : c.id)}
                   >
-                    View Task
+                    {selected === c.id ? "Hide Details" : "Task Details / Start"}
                   </Button>
                 )}
 
