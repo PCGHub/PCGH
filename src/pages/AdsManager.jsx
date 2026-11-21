@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import DemandGenPlanner from '../components/DemandGenPlanner';
 import {
   PlusCircle,
   Target,
@@ -23,6 +24,7 @@ export default function AdsManager() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
+  const [guided, setGuided] = useState(null);
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -137,7 +139,51 @@ export default function AdsManager() {
     }
   }
 
-  function generateTrackingLink(title, platform) {
+  async function saveGuidedCampaign(campaign, fields, plan) {
+    const title = fields.title.trim() || 'Untitled Demand Gen campaign';
+    const trackingLink = plan.reviewed ? generateTrackingLink(title, 'google', plan.destination) : null;
+    const payload = {
+      title,
+      name: title,
+      platform: 'google',
+      objective: plan.objective,
+      budget: Number(fields.budget) || 0,
+      budget_type: 'daily',
+      currency: fields.currency,
+      target_audience: { location: fields.location, interests: fields.interests },
+      ad_copy: [plan.headline, plan.copy].filter(Boolean).join('\n') || null,
+      status: 'draft',
+      tracking_link: trackingLink,
+      demand_gen_plan: { ...plan, title: fields.title }
+    };
+    const query = campaign
+      ? supabase.from('ad_campaigns').update(payload)
+        .eq('id', campaign.id).eq('user_id', user.id).eq('updated_at', campaign.updated_at)
+      : supabase.from('ad_campaigns').insert({
+        ...payload, user_id: user.id, start_date: new Date().toISOString().slice(0, 10)
+      });
+    const { data: rows, error } = await query.select('*');
+    if (error) {
+      console.error('Error saving guided campaign:', error);
+      throw new Error('Could not save the plan. Try again.');
+    }
+    const [data] = rows ?? [];
+    if (!data) throw new Error('This plan changed or was removed. Close and refresh the campaign list before editing.');
+    setCampaigns(current => campaign
+      ? current.map(item => item.id === data.id ? data : item)
+      : [data, ...current]);
+    if (!campaign) setActiveTab('draft');
+    return data;
+  }
+
+  function generateTrackingLink(title, platform, destination) {
+    if (destination) {
+      const url = new URL(destination);
+      url.searchParams.set('utm_source', platform);
+      url.searchParams.set('utm_medium', 'cpc');
+      url.searchParams.set('utm_campaign', title.toLowerCase().replace(/\s+/g, '-'));
+      return url.toString();
+    }
     const baseUrl = window.location.origin;
     const campaignName = title.toLowerCase().replace(/\s+/g, '-');
     return `${baseUrl}?utm_source=${platform}&utm_medium=cpc&utm_campaign=${campaignName}`;
@@ -196,6 +242,10 @@ export default function AdsManager() {
   }
 
   function handleEdit(campaign) {
+    if (campaign.demand_gen_plan) {
+      setGuided({ campaign });
+      return;
+    }
     setEditingCampaign(campaign);
     setFormData({
       title: campaign.title || '',
@@ -397,11 +447,12 @@ export default function AdsManager() {
           </p>
         </div>
 
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Ad Planner</h1>
             <p className="text-slate-600 mt-1">Plan advertising campaigns to launch on external platforms</p>
           </div>
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setGuided({campaign: null})} className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">Plan Demand Gen</button>
           <button
             onClick={() => {
               resetForm();
@@ -412,7 +463,7 @@ export default function AdsManager() {
           >
             <PlusCircle className="w-5 h-5" />
             New Ad Plan
-          </button>
+          </button></div>
         </div>
 
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
@@ -466,15 +517,16 @@ export default function AdsManager() {
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-xl font-semibold text-slate-900">{campaign.title}</h3>
+                      <h3 className="text-xl font-semibold text-slate-900">{campaign.title || campaign.name}</h3>
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         campaign.status === 'active' ? 'bg-green-100 text-green-700' :
                         campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
                         campaign.status === 'completed' ? 'bg-blue-100 text-blue-700' :
                         'bg-slate-100 text-slate-700'
                       }`}>
-                        {campaign.status}
+                        {campaign.demand_gen_plan?.reviewed ? "Ready for manual launch" : campaign.status}
                       </span>
+                      {campaign.demand_gen_plan && <span className="text-xs font-medium text-blue-700">Demand Gen</span>}
                     </div>
                     {campaign.description && (
                       <p className="text-slate-600 mb-3">{campaign.description}</p>
@@ -503,7 +555,7 @@ export default function AdsManager() {
                   </div>
 
                   <div className="flex gap-2">
-                    {campaign.status === 'draft' && (
+                    {campaign.status === 'draft' && !campaign.demand_gen_plan && (
                       <button
                         onClick={() => handleStatusChange(campaign.id, 'active')}
                         className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -600,6 +652,8 @@ export default function AdsManager() {
           </div>
         )}
       </div>
+
+      {guided && <DemandGenPlanner campaign={guided.campaign} onSave={saveGuidedCampaign} onClose={() => setGuided(null)} />}
 
       {showCreateModal && (
         <div role="dialog" aria-modal="true" aria-label="Ad plan editor" className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
