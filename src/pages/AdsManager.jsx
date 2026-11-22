@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import FacebookPublisher from '../components/FacebookPublisher';
 import DemandGenPlanner from '../components/DemandGenPlanner';
 import {
   PlusCircle,
@@ -24,6 +25,7 @@ export default function AdsManager() {
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
   const [guided, setGuided] = useState(null);
+  const [social, setSocial] = useState(null);
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -444,6 +446,10 @@ export default function AdsManager() {
             <p className="text-slate-600 mt-1">Plan and organize your advertising campaigns</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setSocial({ campaign: null })}
+              className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">
+              Publish to Social
+            </button>
             <button type="button" onClick={() => setGuided({ campaign: null })}
               className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">
               Plan Demand Gen
@@ -638,6 +644,11 @@ export default function AdsManager() {
                   </div>
                 )}
 
+                {campaign.user_id === user?.id && <button type="button" onClick={() => setSocial({ campaign })}
+                  className="mt-3 text-sm font-medium text-blue-700 underline">
+                  Prepare Facebook post
+                </button>}
+
                 {campaign.notes && (
                   <div className="bg-amber-50 border-l-4 border-amber-400 p-4">
                     <p className="text-sm text-amber-800">{campaign.notes}</p>
@@ -649,6 +660,7 @@ export default function AdsManager() {
         )}
       </div>
 
+      {social && <FacebookPublisher campaign={social.campaign} onClose={() => setSocial(null)} />}
       {guided && <DemandGenPlanner campaign={guided.campaign} onSave={saveGuidedCampaign} onClose={() => setGuided(null)} />}
 
       {showCreateModal && (
