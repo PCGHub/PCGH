@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import DemandGenPlanner from '../components/DemandGenPlanner';
 import AdStudio from '../components/AdStudio';
+import SocialCampaignManager from '../components/SocialCampaignManager';
 import {
   PlusCircle,
   Target,
@@ -27,6 +28,7 @@ export default function AdsManager() {
   const [activeTab, setActiveTab] = useState('all');
   const [guided, setGuided] = useState(null);
   const [studio, setStudio] = useState(false);
+  const [social, setSocial] = useState(false);
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -454,7 +456,7 @@ export default function AdsManager() {
             <h1 className="text-3xl font-bold text-slate-900">Ad Planner</h1>
             <p className="text-slate-600 mt-1">Plan advertising campaigns to launch on external platforms</p>
           </div>
-          <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setStudio(true)} className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">Ad Studio</button><button type="button" onClick={() => setGuided({campaign: null})} className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">Plan Demand Gen</button>
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setSocial(true)} className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700">Social Campaigns</button><button type="button" onClick={() => setStudio(true)} className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">Ad Studio</button><button type="button" onClick={() => setGuided({campaign: null})} className="rounded-lg border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50">Plan Demand Gen</button>
           <button
             onClick={() => {
               resetForm();
@@ -655,6 +657,7 @@ export default function AdsManager() {
         )}
       </div>
 
+      {social && user?.id && <SocialCampaignManager userId={user.id} onClose={() => setSocial(false)} />}
       {studio && <AdStudio onClose={() => setStudio(false)} />}
       {guided && <DemandGenPlanner campaign={guided.campaign} onSave={saveGuidedCampaign} onClose={() => setGuided(null)} />}
 
